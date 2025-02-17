@@ -422,14 +422,20 @@ impl WindowManager {
                                         })
                                         .unwrap_or(&monitors_slice[0]);
 
-                                    window.width = float_width;
-                                    window.height = float_height;
-                                    window.x = current_monitor.x_org as i32
+                                    let new_x = current_monitor.x_org as i32
                                         + ((current_monitor.width as u32 - float_width) / 2) as i32;
-                                    window.y = current_monitor.y_org as i32
+                                    let new_y = current_monitor.y_org as i32
                                         + ((current_monitor.height as u32 - float_height) / 2)
                                             as i32
                                         + bar_height as i32;
+
+                                    window.width = float_width;
+                                    window.height = float_height;
+                                    window.x = new_x;
+                                    window.y = new_y;
+
+                                    window.pre_float_x = new_x;
+                                    window.pre_float_y = new_y;
 
                                     xlib::XFree(monitors as *mut _);
                                 } else {
@@ -443,11 +449,17 @@ impl WindowManager {
                                     )
                                         as u32;
 
+                                    let new_x = ((screen_width - float_width) / 2) as i32;
+                                    let new_y =
+                                        ((screen_height - float_height) / 2 + bar_height) as i32;
+
                                     window.width = float_width;
                                     window.height = float_height;
-                                    window.x = ((screen_width - float_width) / 2) as i32;
-                                    window.y =
-                                        ((screen_height - float_height) / 2 + bar_height) as i32;
+                                    window.x = new_x;
+                                    window.y = new_y;
+
+                                    window.pre_float_x = new_x;
+                                    window.pre_float_y = new_y;
                                 }
 
                                 xlib::XMoveResizeWindow(
