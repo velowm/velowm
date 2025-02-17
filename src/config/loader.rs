@@ -92,7 +92,7 @@ command = "exit"
 
 [[binds]]
 key = "q"
-command = "alacritty"
+command = "spawn alacritty"
 
 [[binds]]
 key = "c"
