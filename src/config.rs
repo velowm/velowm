@@ -76,7 +76,7 @@ impl Config {
     pub fn get_config_path() -> Result<PathBuf> {
         let home = std::env::var("HOME").context("Failed to get HOME directory")?;
 
-        Ok(PathBuf::from(home).join(".config/velocitty/config.toml"))
+        Ok(PathBuf::from(home).join(".config/velowm/config.toml"))
     }
 
     fn create_default_config(path: &PathBuf) -> Result<()> {
