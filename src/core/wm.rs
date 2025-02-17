@@ -1,14 +1,6 @@
 use anyhow::Result;
 use log::{debug, error, info, warn};
-use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
-use std::{
-    process::Command as ProcessCommand,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc::channel,
-    },
-    thread,
-};
+use std::process::Command as ProcessCommand;
 use x11::xlib;
 
 use crate::{
@@ -21,8 +13,6 @@ use crate::{
 
 use super::{window::Window, workspace::Workspace};
 
-static SHOULD_RELOAD_CONFIG: AtomicBool = AtomicBool::new(false);
-
 pub struct WindowManager {
     display: Display,
     running: bool,
@@ -30,7 +20,6 @@ pub struct WindowManager {
     cursor: Cursor,
     config: Config,
     layout: MasterStackLayout,
-    _watcher: RecommendedWatcher,
     notification: NotificationWindow,
     workspaces: Vec<Workspace>,
     current_workspace: usize,
@@ -40,9 +29,6 @@ pub struct WindowManager {
 impl WindowManager {
     pub fn new() -> Result<Self> {
         info!("Initializing window manager");
-        unsafe {
-            libc::signal(libc::SIGUSR1, Self::handle_sigusr1 as libc::sighandler_t);
-        }
 
         let display = Display::new()?;
         let root = unsafe { xlib::XDefaultRootWindow(display.raw()) };
@@ -75,32 +61,6 @@ impl WindowManager {
             )
         };
 
-        let (tx, rx) = channel();
-        let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
-            if let Ok(event) = res {
-                if event.kind.is_modify() {
-                    let _ = tx.send(());
-                }
-            }
-        })?;
-
-        let config_path = Config::get_config_path()?;
-        watcher.watch(&config_path, RecursiveMode::NonRecursive)?;
-
-        let pid = std::process::id();
-        thread::spawn(move || {
-            while rx.recv().is_ok() {
-                thread::sleep(std::time::Duration::from_millis(100));
-                if let Ok(mut cmd) = ProcessCommand::new("kill")
-                    .arg("-SIGUSR1")
-                    .arg(pid.to_string())
-                    .spawn()
-                {
-                    let _ = cmd.wait();
-                }
-            }
-        });
-
         unsafe {
             xlib::XDefineCursor(display.raw(), root, cursor.raw());
 
@@ -128,63 +88,11 @@ impl WindowManager {
             cursor,
             config,
             layout,
-            _watcher: watcher,
             notification,
             workspaces,
             current_workspace: 0,
             status_bar,
         })
-    }
-
-    unsafe extern "C" fn handle_sigusr1(_: i32) {
-        SHOULD_RELOAD_CONFIG.store(true, Ordering::SeqCst);
-    }
-
-    fn reload_config(&mut self) -> Result<()> {
-        info!("Reloading configuration");
-        let new_config = match Config::load() {
-            Ok(config) => config,
-            Err(e) => {
-                error!("Failed to load config: {}", e);
-                unsafe {
-                    self.notification
-                        .show_error(&format!("Failed to load config: {}", e));
-                }
-                return Ok(());
-            }
-        };
-        let root = unsafe { xlib::XDefaultRootWindow(self.display.raw()) };
-
-        unsafe {
-            xlib::XUngrabKey(self.display.raw(), xlib::AnyKey, xlib::AnyModifier, root);
-
-            Self::setup_key_bindings(self.display.raw(), root, &new_config);
-
-            xlib::XSync(self.display.raw(), 0);
-        }
-
-        self.layout.update_config(new_config.clone());
-
-        unsafe {
-            let screen_width =
-                xlib::XDisplayWidth(self.display.raw(), xlib::XDefaultScreen(self.display.raw()))
-                    as u32;
-            self.status_bar = StatusBar::new(
-                self.display.raw(),
-                self.layout.get_root(),
-                screen_width,
-                new_config.appearance.bar.clone(),
-            );
-            self.status_bar.draw(self.current_workspace);
-        }
-
-        self.config = new_config;
-
-        unsafe {
-            xlib::XSync(self.display.raw(), 0);
-        }
-
-        Ok(())
     }
 
     unsafe fn setup_key_bindings(display: *mut xlib::Display, root: xlib::Window, config: &Config) {
@@ -209,20 +117,6 @@ impl WindowManager {
         }
 
         while self.running {
-            if SHOULD_RELOAD_CONFIG.load(Ordering::SeqCst) {
-                if let Err(e) = self.reload_config() {
-                    unsafe {
-                        self.notification
-                            .show_error(&format!("Failed to reload config: {}", e));
-                    }
-                }
-                SHOULD_RELOAD_CONFIG.store(false, Ordering::SeqCst);
-                self.layout.relayout();
-                unsafe {
-                    xlib::XSync(self.display.raw(), 0);
-                }
-            }
-
             let mut event: xlib::XEvent = unsafe { std::mem::zeroed() };
             unsafe {
                 xlib::XNextEvent(self.display.raw(), &mut event);
