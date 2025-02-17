@@ -11,6 +11,12 @@ pub struct Window {
     pub pre_float_y: i32,
     pub pre_float_width: u32,
     pub pre_float_height: u32,
+    pub is_fullscreen: bool,
+    pub pre_fullscreen_x: i32,
+    pub pre_fullscreen_y: i32,
+    pub pre_fullscreen_width: u32,
+    pub pre_fullscreen_height: u32,
+    pub pre_fullscreen_border_width: u32,
 }
 
 impl Window {
@@ -26,6 +32,12 @@ impl Window {
             pre_float_y: 0,
             pre_float_width: 0,
             pre_float_height: 0,
+            is_fullscreen: false,
+            pre_fullscreen_x: 0,
+            pre_fullscreen_y: 0,
+            pre_fullscreen_width: 0,
+            pre_fullscreen_height: 0,
+            pre_fullscreen_border_width: 0,
         }
     }
 }

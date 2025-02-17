@@ -51,6 +51,10 @@ impl Default for Config {
                     key: "space".to_string(),
                     command: Command::ToggleFloat,
                 },
+                Bind {
+                    key: "f".to_string(),
+                    command: Command::ToggleFullscreen,
+                },
             ],
             appearance: Appearance::default(),
             logging_enabled: true,
@@ -135,6 +139,7 @@ height = 600
 #   - close: Close focused window
 #   - workspace<N>: Switch to workspace N (1-10)
 #   - toggle_float: Toggle floating mode for focused window
+#   - toggle_fullscreen: Toggle fullscreen mode for focused window
 #   - Any other string will be executed as a command
 [[binds]]
 key = "w"
@@ -151,6 +156,10 @@ command = "close"
 [[binds]]
 key = "space"
 command = "toggle_float"
+
+[[binds]]
+key = "f"
+command = "toggle_fullscreen"
 
 # Workspace bindings
 [[binds]]

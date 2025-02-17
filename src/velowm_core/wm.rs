@@ -312,6 +312,7 @@ impl WindowManager {
                     }
                     Command::Workspace(idx) => self.switch_to_workspace(*idx),
                     Command::ToggleFloat => self.toggle_float(),
+                    Command::ToggleFullscreen => self.toggle_fullscreen(),
                 }
             }
         }
@@ -455,6 +456,113 @@ impl WindowManager {
                             self.layout.remove_window(window.id);
                             self.layout.relayout();
                             xlib::XRaiseWindow(self.display.raw(), window.id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn toggle_fullscreen(&mut self) {
+        unsafe {
+            let mut root_return: xlib::Window = 0;
+            let mut child_return: xlib::Window = 0;
+            let mut root_x: i32 = 0;
+            let mut root_y: i32 = 0;
+            let mut win_x: i32 = 0;
+            let mut win_y: i32 = 0;
+            let mut mask_return: u32 = 0;
+
+            xlib::XQueryPointer(
+                self.display.raw(),
+                self.layout.get_root(),
+                &mut root_return,
+                &mut child_return,
+                &mut root_x,
+                &mut root_y,
+                &mut win_x,
+                &mut win_y,
+                &mut mask_return,
+            );
+
+            if child_return != 0 && child_return != self.layout.get_root() {
+                if let Some(workspace) = self.workspaces.get_mut(self.current_workspace) {
+                    if let Some(window) =
+                        workspace.windows.iter_mut().find(|w| w.id == child_return)
+                    {
+                        let mut num_monitors = 0;
+                        let monitors =
+                            xinerama::XineramaQueryScreens(self.display.raw(), &mut num_monitors);
+
+                        if !monitors.is_null() && num_monitors > 0 {
+                            let monitors_slice =
+                                std::slice::from_raw_parts(monitors, num_monitors as usize);
+                            let current_monitor = monitors_slice
+                                .iter()
+                                .find(|monitor| {
+                                    root_x >= monitor.x_org as i32
+                                        && root_x < monitor.x_org as i32 + monitor.width as i32
+                                        && root_y >= monitor.y_org as i32
+                                        && root_y < monitor.y_org as i32 + monitor.height as i32
+                                })
+                                .unwrap_or(&monitors_slice[0]);
+
+                            if window.is_fullscreen {
+                                window.is_fullscreen = false;
+                                window.x = window.pre_fullscreen_x;
+                                window.y = window.pre_fullscreen_y;
+                                window.width = window.pre_fullscreen_width;
+                                window.height = window.pre_fullscreen_height;
+                                xlib::XSetWindowBorderWidth(
+                                    self.display.raw(),
+                                    window.id,
+                                    window.pre_fullscreen_border_width,
+                                );
+                                if window.is_floating {
+                                    xlib::XMoveResizeWindow(
+                                        self.display.raw(),
+                                        window.id,
+                                        window.x,
+                                        window.y,
+                                        window.width,
+                                        window.height,
+                                    );
+                                } else {
+                                    self.layout.relayout();
+                                }
+                            } else {
+                                let mut attrs: xlib::XWindowAttributes = std::mem::zeroed();
+                                xlib::XGetWindowAttributes(
+                                    self.display.raw(),
+                                    window.id,
+                                    &mut attrs,
+                                );
+
+                                window.is_fullscreen = true;
+                                window.pre_fullscreen_x = attrs.x;
+                                window.pre_fullscreen_y = attrs.y;
+                                window.pre_fullscreen_width = attrs.width as u32;
+                                window.pre_fullscreen_height = attrs.height as u32;
+                                window.pre_fullscreen_border_width = attrs.border_width as u32;
+
+                                window.x = current_monitor.x_org as i32;
+                                window.y = current_monitor.y_org as i32;
+                                window.width = current_monitor.width as u32;
+                                window.height = current_monitor.height as u32;
+
+                                xlib::XSetWindowBorderWidth(self.display.raw(), window.id, 0);
+                                xlib::XMoveResizeWindow(
+                                    self.display.raw(),
+                                    window.id,
+                                    window.x,
+                                    window.y,
+                                    window.width,
+                                    window.height,
+                                );
+                                xlib::XRaiseWindow(self.display.raw(), window.id);
+                            }
+
+                            xlib::XFree(monitors as *mut _);
                         }
                     }
                 }

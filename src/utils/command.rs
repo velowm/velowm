@@ -9,6 +9,7 @@ pub enum Command {
     Spawn(String),
     Workspace(usize),
     ToggleFloat,
+    ToggleFullscreen,
 }
 
 impl FromStr for Command {
@@ -19,6 +20,7 @@ impl FromStr for Command {
             "exit" => Ok(Command::Exit),
             "close" => Ok(Command::Close),
             "toggle_float" => Ok(Command::ToggleFloat),
+            "toggle_fullscreen" => Ok(Command::ToggleFullscreen),
             s if s.starts_with("spawn ") => Ok(Command::Spawn(s[6..].to_string())),
             s if s.starts_with("workspace") => {
                 let idx = s[9..]
