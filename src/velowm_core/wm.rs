@@ -30,6 +30,7 @@ pub struct WindowManager {
     resize_start_height: u32,
     resized_window: Option<xlib::Window>,
     net_active_window: xlib::Atom,
+    net_current_desktop: xlib::Atom,
 }
 
 impl WindowManager {
@@ -68,25 +69,88 @@ impl WindowManager {
             }
         }
 
-        let (net_active_window, _) = unsafe {
+        let (net_active_window, net_current_desktop) = unsafe {
             let net_active_window = xlib::XInternAtom(
                 display.raw(),
                 b"_NET_ACTIVE_WINDOW\0".as_ptr() as *const i8,
                 0,
             );
+            let net_current_desktop = xlib::XInternAtom(
+                display.raw(),
+                b"_NET_CURRENT_DESKTOP\0".as_ptr() as *const i8,
+                0,
+            );
+            let net_number_of_desktops = xlib::XInternAtom(
+                display.raw(),
+                b"_NET_NUMBER_OF_DESKTOPS\0".as_ptr() as *const i8,
+                0,
+            );
+            let net_desktop_names = xlib::XInternAtom(
+                display.raw(),
+                b"_NET_DESKTOP_NAMES\0".as_ptr() as *const i8,
+                0,
+            );
+            let net_supported =
+                xlib::XInternAtom(display.raw(), b"_NET_SUPPORTED\0".as_ptr() as *const i8, 0);
+
+            let supported_atoms = [
+                net_active_window,
+                net_current_desktop,
+                net_number_of_desktops,
+                net_desktop_names,
+            ];
 
             xlib::XChangeProperty(
                 display.raw(),
                 root,
-                net_active_window,
+                net_supported,
                 xlib::XA_ATOM,
                 32,
                 xlib::PropModeReplace,
-                &net_active_window as *const xlib::Atom as *const u8,
+                supported_atoms.as_ptr() as *const u8,
+                supported_atoms.len() as i32,
+            );
+
+            let num_desktops: u32 = 10;
+            xlib::XChangeProperty(
+                display.raw(),
+                root,
+                net_number_of_desktops,
+                xlib::XA_CARDINAL,
+                32,
+                xlib::PropModeReplace,
+                &num_desktops as *const u32 as *const u8,
                 1,
             );
 
-            (net_active_window, 0)
+            let current_desktop: u32 = 0;
+            xlib::XChangeProperty(
+                display.raw(),
+                root,
+                net_current_desktop,
+                xlib::XA_CARDINAL,
+                32,
+                xlib::PropModeReplace,
+                &current_desktop as *const u32 as *const u8,
+                1,
+            );
+
+            let names = (0..10)
+                .map(|i| format!("Workspace {}", i + 1))
+                .collect::<Vec<_>>();
+            let names_str = names.join("\0") + "\0";
+            xlib::XChangeProperty(
+                display.raw(),
+                root,
+                net_desktop_names,
+                xlib::XInternAtom(display.raw(), b"UTF8_STRING\0".as_ptr() as *const i8, 0),
+                8,
+                xlib::PropModeReplace,
+                names_str.as_bytes().as_ptr(),
+                names_str.len() as i32,
+            );
+
+            (net_active_window, net_current_desktop)
         };
 
         unsafe {
@@ -128,6 +192,7 @@ impl WindowManager {
             resize_start_height: 0,
             resized_window: None,
             net_active_window,
+            net_current_desktop,
         })
     }
 
@@ -889,6 +954,7 @@ impl WindowManager {
         }
 
         self.current_workspace = index;
+        self.update_current_desktop();
         self.layout.clear_windows();
 
         if let Some(new) = self.workspaces.get(self.current_workspace) {
@@ -1065,6 +1131,24 @@ impl WindowManager {
                 32,
                 xlib::PropModeReplace,
                 &window as *const xlib::Window as *const u8,
+                1,
+            );
+            xlib::XSync(self.display.raw(), 0);
+        }
+    }
+
+    fn update_current_desktop(&mut self) {
+        unsafe {
+            let root = xlib::XDefaultRootWindow(self.display.raw());
+            let current_desktop = self.current_workspace as u32;
+            xlib::XChangeProperty(
+                self.display.raw(),
+                root,
+                self.net_current_desktop,
+                xlib::XA_CARDINAL,
+                32,
+                xlib::PropModeReplace,
+                &current_desktop as *const u32 as *const u8,
                 1,
             );
             xlib::XSync(self.display.raw(), 0);
