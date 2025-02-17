@@ -257,7 +257,7 @@ impl WindowManager {
     }
 
     fn handle_motion_notify(&mut self, event: xlib::XEvent) {
-        let motion_event: xlib::XMotionEvent = From::from(event);
+        let _motion_event: xlib::XMotionEvent = From::from(event);
         unsafe {
             let mut root_return: xlib::Window = 0;
             let mut child_return: xlib::Window = 0;

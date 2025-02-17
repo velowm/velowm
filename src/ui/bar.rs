@@ -14,6 +14,13 @@ pub struct StatusBar {
 }
 
 impl StatusBar {
+    /// Creates a new bar window
+    ///
+    /// # Safety
+    /// This function is unsafe because it interacts directly with X11 through raw pointers.
+    /// The caller must ensure that:
+    /// - The display pointer is valid and points to an active X connection
+    /// - The root window ID is valid
     pub unsafe fn new(
         display: *mut xlib::Display,
         root: xlib::Window,
@@ -63,7 +70,7 @@ impl StatusBar {
         let gc = xlib::XCreateGC(display, window, 0, std::ptr::null_mut());
         xlib::XSetForeground(display, gc, config.get_text_color());
 
-        let font = xlib::XLoadQueryFont(display, b"fixed\0".as_ptr() as *const _);
+        let font = xlib::XLoadQueryFont(display, c"fixed".as_ptr() as *const _);
         if !font.is_null() {
             xlib::XSetFont(display, gc, (*font).fid);
         }
@@ -100,6 +107,11 @@ impl StatusBar {
         None
     }
 
+    /// Draws the status bar with the current workspace information
+    ///
+    /// # Safety
+    /// This function is unsafe because it interacts with X11 through raw pointers.
+    /// The caller must ensure that all X11 resources referenced by this StatusBar instance are still valid.
     pub unsafe fn draw(&self, current_workspace: usize) {
         if !self.config.enabled {
             xlib::XUnmapWindow(self.display, self.window);
