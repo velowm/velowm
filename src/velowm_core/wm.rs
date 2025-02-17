@@ -287,7 +287,6 @@ impl WindowManager {
                 }
             } else if child_return != 0 && child_return != self.layout.get_root() {
                 self.layout.focus_window(child_return);
-                self.raise_floating_windows();
             }
         }
     }
@@ -610,6 +609,7 @@ impl WindowManager {
             unsafe {
                 xlib::XSync(self.display.raw(), 0);
             }
+            self.raise_floating_windows();
         }
     }
 
@@ -636,8 +636,34 @@ impl WindowManager {
             && enter_event.window != 0
             && enter_event.window != self.layout.get_root()
         {
-            self.layout.focus_window(enter_event.window);
-            self.raise_floating_windows();
+            if let Some(workspace) = self.workspaces.get(self.current_workspace) {
+                for window in &workspace.windows {
+                    unsafe {
+                        let border_color = if window.id == enter_event.window {
+                            self.config.get_focused_border_color()
+                        } else {
+                            self.config.get_border_color()
+                        };
+                        xlib::XSetWindowBorder(self.display.raw(), window.id, border_color);
+                    }
+                }
+
+                self.layout.focus_window(enter_event.window);
+
+                if let Some(window) = workspace
+                    .windows
+                    .iter()
+                    .find(|w| w.id == enter_event.window)
+                {
+                    if window.is_floating {
+                        unsafe {
+                            xlib::XRaiseWindow(self.display.raw(), window.id);
+                        }
+                    } else {
+                        self.raise_floating_windows();
+                    }
+                }
+            }
         }
     }
 
