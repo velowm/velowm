@@ -12,7 +12,7 @@ use x11::xlib;
 
 use crate::{
     config::{command::Command, loader::Config},
-    ui::{cursor::Cursor, layout::MasterStackLayout},
+    ui::{cursor::Cursor, layout::MasterStackLayout, notification::NotificationWindow},
     utils::x11::Display,
 };
 
@@ -26,6 +26,7 @@ pub struct WindowManager {
     config: Config,
     layout: MasterStackLayout,
     _watcher: RecommendedWatcher,
+    notification: NotificationWindow,
 }
 
 impl WindowManager {
@@ -35,10 +36,19 @@ impl WindowManager {
         }
 
         let display = Display::new()?;
-        let cursor = unsafe { Cursor::new(display.raw())? };
-        let config = Config::load()?;
         let root = unsafe { xlib::XDefaultRootWindow(display.raw()) };
+        let cursor = unsafe { Cursor::new(display.raw())? };
+
+        let config = Config::load().unwrap_or_else(|_| Config::default());
+
         let layout = unsafe { MasterStackLayout::new(display.raw(), root, config.clone()) };
+        let notification = unsafe { NotificationWindow::new(display.raw(), root) };
+
+        if let Err(e) = Config::load() {
+            unsafe {
+                notification.show_error(&format!("Failed to load config: {}", e));
+            }
+        }
 
         let (tx, rx) = channel();
         let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
@@ -89,6 +99,7 @@ impl WindowManager {
             config,
             layout,
             _watcher: watcher,
+            notification,
         })
     }
 
@@ -97,7 +108,16 @@ impl WindowManager {
     }
 
     fn reload_config(&mut self) -> Result<()> {
-        let new_config = Config::load()?;
+        let new_config = match Config::load() {
+            Ok(config) => config,
+            Err(e) => {
+                unsafe {
+                    self.notification
+                        .show_error(&format!("Failed to load config: {}", e));
+                }
+                return Ok(());
+            }
+        };
         let root = unsafe { xlib::XDefaultRootWindow(self.display.raw()) };
 
         unsafe {
@@ -139,7 +159,10 @@ impl WindowManager {
         while self.running {
             if SHOULD_RELOAD_CONFIG.load(Ordering::SeqCst) {
                 if let Err(e) = self.reload_config() {
-                    eprintln!("Failed to reload config: {}", e);
+                    unsafe {
+                        self.notification
+                            .show_error(&format!("Failed to reload config: {}", e));
+                    }
                 }
                 SHOULD_RELOAD_CONFIG.store(false, Ordering::SeqCst);
                 self.layout.relayout();
@@ -159,6 +182,12 @@ impl WindowManager {
                 xlib::UnmapNotify => self.handle_unmap_notify(event),
                 xlib::DestroyNotify => self.handle_destroy_notify(event),
                 xlib::MotionNotify => self.handle_motion_notify(event),
+                xlib::Expose => {
+                    let expose_event: xlib::XExposeEvent = From::from(event);
+                    if expose_event.window == self.notification.window {
+                        // TODO: Store last error message and redraw it here
+                    }
+                }
                 _ => (),
             }
         }
@@ -197,7 +226,10 @@ impl WindowManager {
                     Command::Exit => self.running = false,
                     Command::Spawn(cmd) => {
                         if let Err(e) = ProcessCommand::new(cmd).spawn() {
-                            eprintln!("Failed to spawn {}: {}", cmd, e);
+                            unsafe {
+                                self.notification
+                                    .show_error(&format!("Failed to spawn {}: {}", cmd, e));
+                            }
                         }
                     }
                     Command::Close => self.close_focused_window(),

@@ -1,9 +1,10 @@
+use super::command::deserialize_command;
 use serde::Deserialize;
 use x11::keysym;
 
-use super::command::{deserialize_command, Command};
+pub use super::command::Command;
 
-#[derive(Deserialize, Clone)]
+#[derive(Clone, Deserialize)]
 pub struct Bind {
     pub key: String,
     #[serde(deserialize_with = "deserialize_command")]

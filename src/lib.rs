@@ -20,6 +20,7 @@ pub mod ui {
     pub mod appearance;
     pub mod cursor;
     pub mod layout;
+    pub mod notification;
 }
 
 pub mod config {

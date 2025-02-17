@@ -4,7 +4,7 @@ use std::{fs, path::PathBuf};
 
 use super::{
     appearance::Appearance,
-    keybind::{self, Bind},
+    keybind::{self, Bind, Command},
 };
 
 #[derive(Deserialize, Clone)]
@@ -13,6 +13,25 @@ pub struct Config {
     pub binds: Vec<Bind>,
     #[serde(default)]
     pub appearance: Appearance,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            modifier: "alt".to_string(),
+            binds: vec![
+                Bind {
+                    key: "w".to_string(),
+                    command: Command::Exit,
+                },
+                Bind {
+                    key: "c".to_string(),
+                    command: Command::Close,
+                },
+            ],
+            appearance: Appearance::default(),
+        }
+    }
 }
 
 impl Config {
