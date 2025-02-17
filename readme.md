@@ -11,7 +11,8 @@ Velowm is a simple window manager for X11, written in Rust.
 Always run with:
 
 ```sh
-startx &> log.txt # replace with desired log destinations
+# replace path with desired log destination (very important for issues, debugging, etc)
+exec velowm > ~/velowm.log 2>&1
 ```
 
 Basic xinitrc:
