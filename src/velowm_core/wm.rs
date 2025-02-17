@@ -631,7 +631,10 @@ impl WindowManager {
 
     fn handle_enter_notify(&mut self, event: xlib::XEvent) {
         let enter_event: xlib::XCrossingEvent = From::from(event);
-        if !self.dragging && enter_event.window != 0 && enter_event.window != self.layout.get_root()
+        if !self.dragging
+            && !self.resizing
+            && enter_event.window != 0
+            && enter_event.window != self.layout.get_root()
         {
             self.layout.focus_window(enter_event.window);
             self.raise_floating_windows();
