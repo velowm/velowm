@@ -29,6 +29,7 @@ pub struct WindowManager {
     resize_start_width: u32,
     resize_start_height: u32,
     resized_window: Option<xlib::Window>,
+    net_active_window: xlib::Atom,
 }
 
 impl WindowManager {
@@ -66,6 +67,27 @@ impl WindowManager {
                 );
             }
         }
+
+        let (net_active_window, _) = unsafe {
+            let net_active_window = xlib::XInternAtom(
+                display.raw(),
+                b"_NET_ACTIVE_WINDOW\0".as_ptr() as *const i8,
+                0,
+            );
+
+            xlib::XChangeProperty(
+                display.raw(),
+                root,
+                net_active_window,
+                xlib::XA_ATOM,
+                32,
+                xlib::PropModeReplace,
+                &net_active_window as *const xlib::Atom as *const u8,
+                1,
+            );
+
+            (net_active_window, 0)
+        };
 
         unsafe {
             xlib::XDefineCursor(display.raw(), root, cursor.normal());
@@ -105,6 +127,7 @@ impl WindowManager {
             resize_start_width: 0,
             resize_start_height: 0,
             resized_window: None,
+            net_active_window,
         })
     }
 
@@ -802,10 +825,11 @@ impl WindowManager {
             && enter_event.window != self.layout.get_root()
             && enter_event.window != self.notification.borrow().window
         {
-            if let Some(workspace) = self.workspaces.get(self.current_workspace) {
+            let window_id = enter_event.window;
+            let is_floating = if let Some(workspace) = self.workspaces.get(self.current_workspace) {
                 for window in &workspace.windows {
                     unsafe {
-                        let border_color = if window.id == enter_event.window {
+                        let border_color = if window.id == window_id {
                             self.config.get_focused_border_color()
                         } else {
                             self.config.get_border_color()
@@ -814,30 +838,28 @@ impl WindowManager {
                     }
                 }
 
-                self.layout.focus_window(enter_event.window);
-
-                if let Some(window) = workspace
+                workspace
                     .windows
                     .iter()
-                    .find(|w| w.id == enter_event.window)
-                {
-                    if window.is_floating {
-                        unsafe {
-                            xlib::XRaiseWindow(self.display.raw(), window.id);
-                            xlib::XRaiseWindow(
-                                self.display.raw(),
-                                self.notification.borrow().window,
-                            );
-                        }
-                    } else {
-                        self.raise_floating_windows();
-                        unsafe {
-                            xlib::XRaiseWindow(
-                                self.display.raw(),
-                                self.notification.borrow().window,
-                            );
-                        }
-                    }
+                    .find(|w| w.id == window_id)
+                    .map(|w| w.is_floating)
+                    .unwrap_or(false)
+            } else {
+                false
+            };
+
+            self.layout.focus_window(window_id);
+            self.set_active_window(window_id);
+
+            if is_floating {
+                unsafe {
+                    xlib::XRaiseWindow(self.display.raw(), window_id);
+                    xlib::XRaiseWindow(self.display.raw(), self.notification.borrow().window);
+                }
+            } else {
+                self.raise_floating_windows();
+                unsafe {
+                    xlib::XRaiseWindow(self.display.raw(), self.notification.borrow().window);
                 }
             }
         }
@@ -902,6 +924,7 @@ impl WindowManager {
             if let Some(focused) = new.get_focused_window() {
                 if !focused.is_dock {
                     self.layout.focus_window(focused.id);
+                    self.set_active_window(focused.id);
                 }
             }
             self.raise_floating_windows();
@@ -1029,5 +1052,22 @@ impl WindowManager {
         }
         self.resizing = false;
         self.resized_window = None;
+    }
+
+    fn set_active_window(&mut self, window: xlib::Window) {
+        unsafe {
+            let root = xlib::XDefaultRootWindow(self.display.raw());
+            xlib::XChangeProperty(
+                self.display.raw(),
+                root,
+                self.net_active_window,
+                xlib::XA_WINDOW,
+                32,
+                xlib::PropModeReplace,
+                &window as *const xlib::Window as *const u8,
+                1,
+            );
+            xlib::XSync(self.display.raw(), 0);
+        }
     }
 }

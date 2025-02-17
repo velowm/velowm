@@ -22,7 +22,6 @@ pub struct MasterStackLayout {
     display: *mut xlib::Display,
     root: xlib::Window,
     master_width_ratio: f32,
-    screen: i32,
     current_monitor: Monitor,
     config: Config,
     focused_window: Option<xlib::Window>,
@@ -75,7 +74,6 @@ impl MasterStackLayout {
             display,
             root,
             master_width_ratio: 0.5,
-            screen,
             current_monitor,
             config,
             focused_window: None,
@@ -202,7 +200,6 @@ impl MasterStackLayout {
 
         let (screen_width, mut screen_height) = self.get_screen_dimensions();
         let gaps = self.config.appearance.gaps;
-        let border_width = self.config.appearance.border_width;
 
         let y_offset = if self.dock_position == DockPosition::Top {
             self.dock_height
