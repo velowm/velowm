@@ -185,6 +185,18 @@ impl WindowManager {
         Ok(())
     }
 
+    fn raise_floating_windows(&mut self) {
+        if let Some(workspace) = self.workspaces.get(self.current_workspace) {
+            for window in &workspace.windows {
+                if window.is_floating {
+                    unsafe {
+                        xlib::XRaiseWindow(self.display.raw(), window.id);
+                    }
+                }
+            }
+        }
+    }
+
     fn handle_motion_notify(&mut self, event: xlib::XEvent) {
         let motion_event: xlib::XMotionEvent = From::from(event);
         unsafe {
@@ -225,6 +237,7 @@ impl WindowManager {
                                     window.x,
                                     window.y,
                                 );
+                                xlib::XRaiseWindow(self.display.raw(), window.id);
                                 return;
                             }
                         }
@@ -240,10 +253,12 @@ impl WindowManager {
                         self.layout.swap_windows(dragged, target);
                         self.layout.relayout();
                         xlib::XSync(self.display.raw(), 0);
+                        self.raise_floating_windows();
                     }
                 }
             } else if child_return != 0 && child_return != self.layout.get_root() {
                 self.layout.focus_window(child_return);
+                self.raise_floating_windows();
             }
         }
     }
@@ -328,6 +343,7 @@ impl WindowManager {
                             window.pre_float_height = window.height;
                             self.layout.remove_window(window.id);
                             self.layout.relayout();
+                            xlib::XRaiseWindow(self.display.raw(), window.id);
                         }
                     }
                 }
@@ -475,6 +491,7 @@ impl WindowManager {
         if !self.dragging && enter_event.window != 0 && enter_event.window != self.layout.get_root()
         {
             self.layout.focus_window(enter_event.window);
+            self.raise_floating_windows();
         }
     }
 
@@ -530,6 +547,7 @@ impl WindowManager {
             if let Some(focused) = new.get_focused_window() {
                 self.layout.focus_window(focused.id);
             }
+            self.raise_floating_windows();
         }
 
         self.layout.relayout();
@@ -558,6 +576,16 @@ impl WindowManager {
             unsafe {
                 debug!("Resetting cursor for window {}", window);
                 xlib::XDefineCursor(self.display.raw(), window, self.cursor.normal());
+                if let Some(workspace) = self.workspaces.get_mut(self.current_workspace) {
+                    if let Some(win) = workspace.windows.iter_mut().find(|w| w.id == window) {
+                        if win.is_floating {
+                            self.drag_start_x = 0;
+                            self.drag_start_y = 0;
+                            win.pre_float_x = win.x;
+                            win.pre_float_y = win.y;
+                        }
+                    }
+                }
                 xlib::XSync(self.display.raw(), 0);
             }
         }
