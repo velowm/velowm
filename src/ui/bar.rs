@@ -1,3 +1,4 @@
+use log::{debug, warn};
 use x11::xlib;
 
 use crate::config::appearance::Bar;
@@ -27,6 +28,10 @@ impl StatusBar {
         screen_width: u32,
         config: Bar,
     ) -> Self {
+        debug!(
+            "Creating new status bar with width {} and height {}",
+            screen_width, config.height
+        );
         let height = config.height;
         let black = xlib::XBlackPixel(display, xlib::XDefaultScreen(display));
 
@@ -73,6 +78,8 @@ impl StatusBar {
         let font = xlib::XLoadQueryFont(display, c"fixed".as_ptr() as *const _);
         if !font.is_null() {
             xlib::XSetFont(display, gc, (*font).fid);
+        } else {
+            warn!("Failed to load 'fixed' font, text rendering may be affected");
         }
 
         xlib::XMapWindow(display, window);
@@ -114,10 +121,12 @@ impl StatusBar {
     /// The caller must ensure that all X11 resources referenced by this StatusBar instance are still valid.
     pub unsafe fn draw(&self, current_workspace: usize) {
         if !self.config.enabled {
+            debug!("Status bar is disabled, unmapping window");
             xlib::XUnmapWindow(self.display, self.window);
             return;
         }
 
+        debug!("Drawing status bar for workspace {}", current_workspace);
         xlib::XMapWindow(self.display, self.window);
         xlib::XRaiseWindow(self.display, self.window);
 

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use log::{debug, error, info, warn};
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::{
     process::Command as ProcessCommand,
@@ -38,6 +39,7 @@ pub struct WindowManager {
 
 impl WindowManager {
     pub fn new() -> Result<Self> {
+        info!("Initializing window manager");
         unsafe {
             libc::signal(libc::SIGUSR1, Self::handle_sigusr1 as libc::sighandler_t);
         }
@@ -46,12 +48,16 @@ impl WindowManager {
         let root = unsafe { xlib::XDefaultRootWindow(display.raw()) };
         let cursor = unsafe { Cursor::new(display.raw())? };
 
-        let config = Config::load().unwrap_or_else(|_| Config::default());
+        let config = Config::load().unwrap_or_else(|_| {
+            warn!("Failed to load config, using default configuration");
+            Config::default()
+        });
 
         let layout = unsafe { MasterStackLayout::new(display.raw(), root, config.clone()) };
         let notification = unsafe { NotificationWindow::new(display.raw(), root) };
 
         if let Err(e) = Config::load() {
+            error!("Failed to load config: {}", e);
             unsafe {
                 notification.show_error(&format!("Failed to load config: {}", e));
             }
@@ -135,9 +141,11 @@ impl WindowManager {
     }
 
     fn reload_config(&mut self) -> Result<()> {
+        info!("Reloading configuration");
         let new_config = match Config::load() {
             Ok(config) => config,
             Err(e) => {
+                error!("Failed to load config: {}", e);
                 unsafe {
                     self.notification
                         .show_error(&format!("Failed to load config: {}", e));
@@ -318,6 +326,7 @@ impl WindowManager {
     }
 
     fn close_focused_window(&mut self) {
+        debug!("Attempting to close focused window");
         unsafe {
             let mut root_return: xlib::Window = 0;
             let mut child_return: xlib::Window = 0;
@@ -389,6 +398,7 @@ impl WindowManager {
     fn handle_map_request(&mut self, event: xlib::XEvent) {
         let map_event: xlib::XMapRequestEvent = From::from(event);
         let window_id = map_event.window;
+        debug!("Handling map request for window {}", window_id);
 
         let mut attrs: xlib::XWindowAttributes = unsafe { std::mem::zeroed() };
         unsafe {
@@ -451,9 +461,11 @@ impl WindowManager {
 
     fn switch_to_workspace(&mut self, index: usize) {
         if index >= self.workspaces.len() || index == self.current_workspace {
+            debug!("Invalid workspace switch request to {}", index);
             return;
         }
 
+        info!("Switching to workspace {}", index);
         if let Some(current) = self.workspaces.get(self.current_workspace) {
             for window in &current.windows {
                 unsafe {
