@@ -119,6 +119,15 @@ show_underline = true
 # Underline color
 underline_color = "#FF3333"
 
+# Floating window settings
+[appearance.floating]
+# Center windows when they become floating
+center_on_float = true
+# Default width for floating windows
+width = 800
+# Default height for floating windows
+height = 600
+
 # Keybindings
 # Format: bind = key,command
 # Commands:

@@ -41,6 +41,24 @@ impl Bar {
 }
 
 #[derive(Deserialize, Default, Clone)]
+pub struct FloatingWindow {
+    #[serde(default)]
+    pub center_on_float: bool,
+    #[serde(default = "default_float_width")]
+    pub width: u32,
+    #[serde(default = "default_float_height")]
+    pub height: u32,
+}
+
+fn default_float_width() -> u32 {
+    800
+}
+
+fn default_float_height() -> u32 {
+    600
+}
+
+#[derive(Deserialize, Default, Clone)]
 pub struct Appearance {
     #[serde(default = "default_border_width")]
     pub border_width: u32,
@@ -52,6 +70,8 @@ pub struct Appearance {
     pub gaps: u32,
     #[serde(default)]
     pub bar: Bar,
+    #[serde(default)]
+    pub floating: FloatingWindow,
 }
 
 fn default_border_width() -> u32 {

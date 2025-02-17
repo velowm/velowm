@@ -1,7 +1,7 @@
 use anyhow::Result;
 use log::{debug, error, info, warn};
 use std::process::Command as ProcessCommand;
-use x11::xlib;
+use x11::{xinerama, xlib};
 
 use crate::{
     config::{command::Command, loader::Config},
@@ -389,10 +389,77 @@ impl WindowManager {
                             window.is_floating = true;
                             window.pre_float_x = child_x;
                             window.pre_float_y = child_y;
-                            window.x = child_x;
-                            window.y = child_y;
                             window.pre_float_width = window.width;
                             window.pre_float_height = window.height;
+
+                            if self.config.appearance.floating.center_on_float {
+                                let float_width = self.config.appearance.floating.width;
+                                let float_height = self.config.appearance.floating.height;
+                                let bar_height = if self.config.appearance.bar.enabled {
+                                    self.config.appearance.bar.height
+                                } else {
+                                    0
+                                };
+
+                                let mut num_monitors = 0;
+                                let monitors = xinerama::XineramaQueryScreens(
+                                    self.display.raw(),
+                                    &mut num_monitors,
+                                );
+
+                                if !monitors.is_null() && num_monitors > 0 {
+                                    let monitors_slice =
+                                        std::slice::from_raw_parts(monitors, num_monitors as usize);
+                                    let current_monitor = monitors_slice
+                                        .iter()
+                                        .find(|monitor| {
+                                            root_x >= monitor.x_org as i32
+                                                && root_x
+                                                    < monitor.x_org as i32 + monitor.width as i32
+                                                && root_y >= monitor.y_org as i32
+                                                && root_y
+                                                    < monitor.y_org as i32 + monitor.height as i32
+                                        })
+                                        .unwrap_or(&monitors_slice[0]);
+
+                                    window.width = float_width;
+                                    window.height = float_height;
+                                    window.x = current_monitor.x_org as i32
+                                        + ((current_monitor.width as u32 - float_width) / 2) as i32;
+                                    window.y = current_monitor.y_org as i32
+                                        + ((current_monitor.height as u32 - float_height) / 2)
+                                            as i32
+                                        + bar_height as i32;
+
+                                    xlib::XFree(monitors as *mut _);
+                                } else {
+                                    let screen_width = xlib::XDisplayWidth(
+                                        self.display.raw(),
+                                        xlib::XDefaultScreen(self.display.raw()),
+                                    ) as u32;
+                                    let screen_height = xlib::XDisplayHeight(
+                                        self.display.raw(),
+                                        xlib::XDefaultScreen(self.display.raw()),
+                                    )
+                                        as u32;
+
+                                    window.width = float_width;
+                                    window.height = float_height;
+                                    window.x = ((screen_width - float_width) / 2) as i32;
+                                    window.y =
+                                        ((screen_height - float_height) / 2 + bar_height) as i32;
+                                }
+
+                                xlib::XMoveResizeWindow(
+                                    self.display.raw(),
+                                    window.id,
+                                    window.x,
+                                    window.y,
+                                    window.width,
+                                    window.height,
+                                );
+                            }
+
                             self.layout.remove_window(window.id);
                             self.layout.relayout();
                             xlib::XRaiseWindow(self.display.raw(), window.id);
