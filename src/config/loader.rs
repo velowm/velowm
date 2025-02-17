@@ -82,9 +82,9 @@ modifier = "alt"
 # Border width in pixels
 border_width = 2
 # Border color in hex format (supports transparency)
-border_color = "#7A8478"
+border_color = "#2B0000"
 # Border color for focused windows
-focused_border_color = "#A7C080"
+focused_border_color = "#FF0000"
 # Gap between windows in pixels
 gaps = 8
 
@@ -93,15 +93,15 @@ gaps = 8
 # Enable or disable the status bar
 enabled = true
 # Bar background color
-background_color = "#0F0F0F"
+background_color = "#000000"
 # Bar text color
-text_color = "#ABB2BF"
+text_color = "#CCCCCC"
 # Active workspace highlight color
-highlight_color = "#3E4451"
+highlight_color = "#800000"
 # Show underline
 show_underline = true
 # Underline color
-underline_color = "#3E4451"
+underline_color = "#FF3333"
 
 # Keybindings
 # Format: bind = key,command

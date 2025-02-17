@@ -57,11 +57,11 @@ fn default_border_width() -> u32 {
 }
 
 fn default_border_color() -> String {
-    String::from("#7A8478")
+    String::from("#2B0000")
 }
 
 fn default_focused_border_color() -> String {
-    String::from("#A7C080")
+    String::from("#FF0000")
 }
 
 fn default_gaps() -> u32 {
@@ -69,19 +69,19 @@ fn default_gaps() -> u32 {
 }
 
 fn default_bar_background_color() -> String {
-    String::from("#0F0F0F")
+    String::from("#000000")
 }
 
 fn default_bar_text_color() -> String {
-    String::from("#ABB2BF")
+    String::from("#CCCCCC")
 }
 
 fn default_bar_highlight_color() -> String {
-    String::from("#3E4451")
+    String::from("#800000")
 }
 
 fn default_bar_underline_color() -> String {
-    String::from("#3E4451")
+    String::from("#FF3333")
 }
 
 impl Appearance {
