@@ -13,6 +13,12 @@ pub struct Config {
     pub binds: Vec<Bind>,
     #[serde(default)]
     pub appearance: Appearance,
+    #[serde(default = "default_logging_enabled")]
+    pub logging_enabled: bool,
+}
+
+fn default_logging_enabled() -> bool {
+    true
 }
 
 impl Default for Config {
@@ -30,6 +36,7 @@ impl Default for Config {
                 },
             ],
             appearance: Appearance::default(),
+            logging_enabled: true,
         }
     }
 }
@@ -76,6 +83,9 @@ impl Config {
 # modifier = "super+alt"
 # Available modifiers: alt, ctrl, shift, super (or win)
 modifier = "alt"
+
+# Enable or disable logging
+logging_enabled = true
 
 # Window appearance
 [appearance]
