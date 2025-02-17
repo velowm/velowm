@@ -28,6 +28,10 @@ pub struct WindowManager {
     drag_start_x: i32,
     drag_start_y: i32,
     dragged_window: Option<xlib::Window>,
+    resizing: bool,
+    resize_start_width: u32,
+    resize_start_height: u32,
+    resized_window: Option<xlib::Window>,
 }
 
 impl WindowManager {
@@ -100,6 +104,10 @@ impl WindowManager {
             drag_start_x: 0,
             drag_start_y: 0,
             dragged_window: None,
+            resizing: false,
+            resize_start_width: 0,
+            resize_start_height: 0,
+            resized_window: None,
         })
     }
 
@@ -150,20 +158,19 @@ impl WindowManager {
                         {
                             self.switch_to_workspace(workspace);
                         }
-                    } else if button_event.button == xlib::Button1
-                        && button_event.state & self.config.get_modifier() != 0
-                    {
-                        debug!(
-                            "Starting drag: modifier pressed={}, expected={}",
-                            button_event.state & self.config.get_modifier(),
-                            self.config.get_modifier()
-                        );
-                        self.start_window_drag(button_event);
+                    } else if button_event.state & self.config.get_modifier() != 0 {
+                        match button_event.button {
+                            1 => self.start_window_drag(button_event),
+                            3 => self.start_window_resize(button_event),
+                            _ => (),
+                        }
                     }
                 }
                 xlib::ButtonRelease => {
                     if self.dragging {
                         self.end_window_drag();
+                    } else if self.resizing {
+                        self.end_window_resize();
                     }
                 }
                 xlib::EnterNotify => self.handle_enter_notify(event),
@@ -250,6 +257,32 @@ impl WindowManager {
                         self.layout.relayout();
                         xlib::XSync(self.display.raw(), 0);
                         self.raise_floating_windows();
+                    }
+                }
+            } else if self.resizing {
+                if let Some(resized) = self.resized_window {
+                    let dx = root_x - self.drag_start_x;
+                    let dy = root_y - self.drag_start_y;
+
+                    if let Some(workspace) = self.workspaces.get_mut(self.current_workspace) {
+                        if let Some(window) = workspace.windows.iter_mut().find(|w| w.id == resized)
+                        {
+                            if window.is_floating {
+                                let new_width =
+                                    ((self.resize_start_width as i32 + dx) as u32).max(100);
+                                let new_height =
+                                    ((self.resize_start_height as i32 + dy) as u32).max(100);
+                                window.width = new_width;
+                                window.height = new_height;
+                                xlib::XResizeWindow(
+                                    self.display.raw(),
+                                    window.id,
+                                    new_width,
+                                    new_height,
+                                );
+                                xlib::XRaiseWindow(self.display.raw(), window.id);
+                            }
+                        }
                     }
                 }
             } else if child_return != 0 && child_return != self.layout.get_root() {
@@ -449,10 +482,22 @@ impl WindowManager {
         unsafe {
             xlib::XGetWindowAttributes(self.display.raw(), window_id, &mut attrs);
 
-            debug!("Grabbing button for window {}", window_id);
+            debug!("Grabbing buttons for window {}", window_id);
             xlib::XGrabButton(
                 self.display.raw(),
                 1,
+                self.config.get_modifier(),
+                window_id,
+                1,
+                (xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask) as u32,
+                xlib::GrabModeAsync,
+                xlib::GrabModeAsync,
+                0,
+                0,
+            );
+            xlib::XGrabButton(
+                self.display.raw(),
+                3,
                 self.config.get_modifier(),
                 window_id,
                 1,
@@ -631,5 +676,66 @@ impl WindowManager {
         }
         self.dragging = false;
         self.dragged_window = None;
+    }
+
+    fn start_window_resize(&mut self, event: xlib::XButtonEvent) {
+        debug!("Starting window resize for window {}", event.window);
+        self.resizing = true;
+        unsafe {
+            let mut root_return: xlib::Window = 0;
+            let mut child_return: xlib::Window = 0;
+            let mut root_x: i32 = 0;
+            let mut root_y: i32 = 0;
+            let mut win_x: i32 = 0;
+            let mut win_y: i32 = 0;
+            let mut mask_return: u32 = 0;
+
+            xlib::XQueryPointer(
+                self.display.raw(),
+                self.layout.get_root(),
+                &mut root_return,
+                &mut child_return,
+                &mut root_x,
+                &mut root_y,
+                &mut win_x,
+                &mut win_y,
+                &mut mask_return,
+            );
+
+            if let Some(workspace) = self.workspaces.get(self.current_workspace) {
+                if let Some(window) = workspace.windows.iter().find(|w| w.id == event.window) {
+                    self.resize_start_width = window.width;
+                    self.resize_start_height = window.height;
+                    self.drag_start_x = root_x;
+                    self.drag_start_y = root_y;
+                    self.resized_window = Some(event.window);
+
+                    debug!("Setting grabbing cursor for window {}", event.window);
+                    xlib::XDefineCursor(self.display.raw(), event.window, self.cursor.grabbing());
+                    xlib::XSync(self.display.raw(), 0);
+                }
+            }
+        }
+    }
+
+    fn end_window_resize(&mut self) {
+        if let Some(window) = self.resized_window {
+            debug!("Ending window resize for window {}", window);
+            unsafe {
+                debug!("Resetting cursor for window {}", window);
+                xlib::XDefineCursor(self.display.raw(), window, self.cursor.normal());
+                if let Some(workspace) = self.workspaces.get_mut(self.current_workspace) {
+                    if let Some(win) = workspace.windows.iter_mut().find(|w| w.id == window) {
+                        if win.is_floating {
+                            win.pre_float_width = win.width;
+                            win.pre_float_height = win.height;
+                        }
+                    }
+                }
+                xlib::XSync(self.display.raw(), 0);
+            }
+        }
+        self.resizing = false;
+        self.resized_window = None;
     }
 }
