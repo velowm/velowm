@@ -115,7 +115,7 @@ text_color = "#CCCCCC"
 # Active workspace highlight color
 highlight_color = "#800000"
 # Show underline
-show_underline = true
+show_underline = false
 # Underline color
 underline_color = "#FF3333"
 
