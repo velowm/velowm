@@ -1,7 +1,7 @@
 use log::{debug, warn};
 use x11::xlib;
 
-use crate::config::appearance::Bar;
+use crate::ui::appearance::Bar;
 
 pub struct StatusBar {
     display: *mut xlib::Display,

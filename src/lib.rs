@@ -25,9 +25,6 @@ pub mod ui {
 }
 
 pub mod config {
-    pub mod appearance;
-    pub mod command;
-    pub mod keybind;
     pub mod loader;
 }
 

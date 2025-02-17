@@ -1,11 +1,12 @@
 use serde::Deserialize;
 use x11::keysym;
 
-use super::command::Command;
+use super::command::{deserialize_command, Command};
 
-#[derive(Deserialize, Clone)]
+#[derive(Clone, Deserialize)]
 pub struct Bind {
     pub key: String,
+    #[serde(deserialize_with = "deserialize_command")]
     pub command: Command,
 }
 
@@ -37,7 +38,41 @@ pub fn get_keysym_for_key(key: &str) -> u64 {
         "x" => keysym::XK_x,
         "y" => keysym::XK_y,
         "z" => keysym::XK_z,
+        "0" => keysym::XK_0,
+        "1" => keysym::XK_1,
+        "2" => keysym::XK_2,
+        "3" => keysym::XK_3,
+        "4" => keysym::XK_4,
+        "5" => keysym::XK_5,
+        "6" => keysym::XK_6,
+        "7" => keysym::XK_7,
+        "8" => keysym::XK_8,
+        "9" => keysym::XK_9,
+        "space" => keysym::XK_space,
         _ => keysym::XK_w,
     }
     .into()
+}
+
+pub fn get_modifier(modifier: &str) -> u32 {
+    modifier
+        .split('+')
+        .map(|m| match m.trim().to_lowercase().as_str() {
+            "alt" => x11::xlib::Mod1Mask,
+            "ctrl" => x11::xlib::ControlMask,
+            "shift" => x11::xlib::ShiftMask,
+            "super" | "win" => x11::xlib::Mod4Mask,
+            _ => x11::xlib::Mod1Mask,
+        })
+        .fold(0, |acc, mask| acc | mask)
+}
+
+pub fn get_modifier_for_key(key: &str) -> u32 {
+    match key.to_lowercase().as_str() {
+        "alt" => x11::xlib::Mod1Mask,
+        "ctrl" => x11::xlib::ControlMask,
+        "shift" => x11::xlib::ShiftMask,
+        "super" | "win" => x11::xlib::Mod4Mask,
+        _ => x11::xlib::Mod1Mask,
+    }
 }

@@ -4,11 +4,11 @@ use std::process::Command as ProcessCommand;
 use x11::{xinerama, xlib};
 
 use crate::{
-    config::{command::Command, loader::Config},
+    config::loader::Config,
     ui::{
         bar::StatusBar, cursor::Cursor, layout::MasterStackLayout, notification::NotificationWindow,
     },
-    utils::x11::Display,
+    utils::{command::Command, x11::Display},
 };
 
 use super::{window::Window, workspace::Workspace};

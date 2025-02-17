@@ -2,9 +2,12 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::{fs, path::PathBuf};
 
-use super::{
-    appearance::Appearance,
-    keybind::{self, Bind, Command},
+use crate::{
+    ui::appearance::Appearance,
+    utils::{
+        command::Command,
+        keybind::{self, Bind},
+    },
 };
 
 #[derive(Deserialize, Clone)]
