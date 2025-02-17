@@ -1,5 +1,6 @@
 use x11::xlib;
 
+#[derive(Clone)]
 pub struct Window {
     pub id: xlib::Window,
     pub x: i32,
@@ -17,6 +18,7 @@ pub struct Window {
     pub pre_fullscreen_width: u32,
     pub pre_fullscreen_height: u32,
     pub pre_fullscreen_border_width: u32,
+    pub is_dock: bool,
 }
 
 impl Window {
@@ -38,6 +40,7 @@ impl Window {
             pre_fullscreen_width: 0,
             pre_fullscreen_height: 0,
             pre_fullscreen_border_width: 0,
+            is_dock: false,
         }
     }
 }

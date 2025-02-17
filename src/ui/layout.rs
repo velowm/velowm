@@ -22,11 +22,19 @@ pub struct MasterStackLayout {
     display: *mut xlib::Display,
     root: xlib::Window,
     master_width_ratio: f32,
-    #[allow(dead_code)]
     screen: i32,
     current_monitor: Monitor,
     config: Config,
     focused_window: Option<xlib::Window>,
+    dock_height: u32,
+    dock_position: DockPosition,
+}
+
+#[derive(PartialEq)]
+enum DockPosition {
+    Top,
+    Bottom,
+    None,
 }
 
 impl MasterStackLayout {
@@ -71,6 +79,8 @@ impl MasterStackLayout {
             current_monitor,
             config,
             focused_window: None,
+            dock_height: 0,
+            dock_position: DockPosition::None,
         }
     }
 
@@ -112,24 +122,24 @@ impl MasterStackLayout {
                 window,
                 xlib::EnterWindowMask | xlib::LeaveWindowMask | xlib::FocusChangeMask,
             );
-        }
 
-        let mut attrs: xlib::XWindowAttributes = unsafe { std::mem::zeroed() };
-        unsafe {
+            let mut attrs: xlib::XWindowAttributes = std::mem::zeroed();
             xlib::XGetWindowAttributes(self.display, window, &mut attrs);
+
+            let new_window = Window {
+                id: window,
+                x: attrs.x,
+                y: attrs.y,
+                width: attrs.width as u32,
+                height: attrs.height as u32,
+            };
+
+            self.windows.push(new_window);
+            self.relayout();
+
+            self.focus_window(window);
+            xlib::XSync(self.display, 0);
         }
-
-        let new_window = Window {
-            id: window,
-            x: attrs.x,
-            y: attrs.y,
-            width: attrs.width as u32,
-            height: attrs.height as u32,
-        };
-
-        self.windows.push(new_window);
-        self.relayout();
-        self.focus_window(window);
     }
 
     pub fn clear_windows(&mut self) {
@@ -174,52 +184,77 @@ impl MasterStackLayout {
         self.relayout();
     }
 
+    pub fn update_dock_space(&mut self, y: i32, height: u32) {
+        if y < self.current_monitor.height as i32 / 2 {
+            self.dock_position = DockPosition::Top;
+        } else {
+            self.dock_position = DockPosition::Bottom;
+        }
+        self.dock_height = height;
+        self.relayout();
+    }
+
     pub fn relayout(&mut self) {
-        if self.windows.is_empty() {
+        let n = self.windows.len();
+        if n == 0 {
             return;
         }
 
-        let (screen_width, screen_height) = self.get_screen_dimensions();
-        let master_width = (screen_width as f32 * self.master_width_ratio) as u32;
-        let stack_width = screen_width - master_width;
-
-        let border_offset = self.config.appearance.border_width * 2;
+        let (screen_width, mut screen_height) = self.get_screen_dimensions();
         let gaps = self.config.appearance.gaps;
+        let border_width = self.config.appearance.border_width;
 
-        match self.windows.len() {
-            0 => (),
+        let y_offset = if self.dock_position == DockPosition::Top {
+            self.dock_height
+        } else {
+            0
+        };
+        screen_height = screen_height.saturating_sub(self.dock_height);
+
+        let usable_width = screen_width.saturating_sub(gaps * 2);
+        let usable_height = screen_height.saturating_sub(gaps * 2);
+
+        let master_width = ((usable_width as f32 * self.master_width_ratio) as u32)
+            .max(usable_width / 3)
+            .min(2 * usable_width / 3);
+        let stack_width = usable_width
+            .saturating_sub(master_width)
+            .saturating_sub(gaps);
+
+        match n {
             1 => {
                 self.apply_window_geometry(
                     0,
                     self.current_monitor.x as u32 + gaps,
-                    self.current_monitor.y as u32 + gaps,
-                    screen_width - border_offset - (gaps * 2),
-                    screen_height - border_offset - (gaps * 2),
+                    self.current_monitor.y as u32 + y_offset + gaps,
+                    usable_width,
+                    usable_height,
                 );
             }
             n => {
                 self.apply_window_geometry(
                     0,
                     self.current_monitor.x as u32 + gaps,
-                    self.current_monitor.y as u32 + gaps,
-                    master_width - border_offset - gaps - (gaps / 2),
-                    screen_height - border_offset - (gaps * 2),
+                    self.current_monitor.y as u32 + y_offset + gaps,
+                    master_width,
+                    usable_height,
                 );
 
                 let stack_count = n - 1;
-                let height_per_window = ((screen_height - (gaps * (stack_count + 1) as u32))
-                    / stack_count as u32)
-                    .saturating_sub(border_offset);
+                let total_stack_gaps = gaps * (stack_count.saturating_sub(1)) as u32;
+                let height_per_window =
+                    (usable_height.saturating_sub(total_stack_gaps)) / stack_count as u32;
 
                 for i in 1..n {
                     let stack_index = i - 1;
                     self.apply_window_geometry(
                         i,
-                        self.current_monitor.x as u32 + master_width + (gaps / 2),
+                        self.current_monitor.x as u32 + gaps + master_width + gaps,
                         self.current_monitor.y as u32
+                            + y_offset
                             + gaps
-                            + stack_index as u32 * (height_per_window + border_offset + gaps),
-                        stack_width - border_offset - gaps - (gaps / 2),
+                            + (stack_index as u32 * (height_per_window + gaps)),
+                        stack_width,
                         height_per_window,
                     );
                 }

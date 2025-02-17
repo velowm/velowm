@@ -183,7 +183,15 @@ impl WindowManager {
     fn raise_floating_windows(&mut self) {
         if let Some(workspace) = self.workspaces.get(self.current_workspace) {
             for window in &workspace.windows {
-                if window.is_floating {
+                if window.is_floating && !window.is_dock {
+                    unsafe {
+                        xlib::XRaiseWindow(self.display.raw(), window.id);
+                    }
+                }
+            }
+
+            for window in &workspace.windows {
+                if window.is_dock {
                     unsafe {
                         xlib::XRaiseWindow(self.display.raw(), window.id);
                     }
@@ -646,37 +654,83 @@ impl WindowManager {
         debug!("Handling map request for window {}", window_id);
 
         let mut attrs: xlib::XWindowAttributes = unsafe { std::mem::zeroed() };
-        unsafe {
+        let is_dock = unsafe {
             xlib::XGetWindowAttributes(self.display.raw(), window_id, &mut attrs);
 
-            debug!("Grabbing buttons for window {}", window_id);
-            xlib::XGrabButton(
+            let net_wm_window_type = xlib::XInternAtom(
                 self.display.raw(),
-                1,
-                self.config.get_modifier(),
-                window_id,
-                1,
-                (xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask) as u32,
-                xlib::GrabModeAsync,
-                xlib::GrabModeAsync,
-                0,
+                b"_NET_WM_WINDOW_TYPE\0".as_ptr() as *const i8,
                 0,
             );
-            xlib::XGrabButton(
+            let net_wm_window_type_dock = xlib::XInternAtom(
                 self.display.raw(),
-                3,
-                self.config.get_modifier(),
-                window_id,
-                1,
-                (xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask) as u32,
-                xlib::GrabModeAsync,
-                xlib::GrabModeAsync,
-                0,
+                b"_NET_WM_WINDOW_TYPE_DOCK\0".as_ptr() as *const i8,
                 0,
             );
-        }
 
-        let window = Window::new(
+            let mut actual_type: xlib::Atom = 0;
+            let mut actual_format: i32 = 0;
+            let mut nitems: u64 = 0;
+            let mut bytes_after: u64 = 0;
+            let mut prop: *mut u8 = std::ptr::null_mut();
+
+            let is_dock = if xlib::XGetWindowProperty(
+                self.display.raw(),
+                window_id,
+                net_wm_window_type,
+                0,
+                1,
+                0,
+                xlib::XA_ATOM,
+                &mut actual_type,
+                &mut actual_format,
+                &mut nitems,
+                &mut bytes_after,
+                &mut prop,
+            ) == 0
+                && !prop.is_null()
+                && nitems > 0
+            {
+                let atom = *(prop as *const xlib::Atom);
+                xlib::XFree(prop as *mut _);
+                atom == net_wm_window_type_dock
+            } else {
+                false
+            };
+
+            debug!("Grabbing buttons for window {}", window_id);
+            if !is_dock {
+                xlib::XGrabButton(
+                    self.display.raw(),
+                    1,
+                    self.config.get_modifier(),
+                    window_id,
+                    1,
+                    (xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask)
+                        as u32,
+                    xlib::GrabModeAsync,
+                    xlib::GrabModeAsync,
+                    0,
+                    0,
+                );
+                xlib::XGrabButton(
+                    self.display.raw(),
+                    3,
+                    self.config.get_modifier(),
+                    window_id,
+                    1,
+                    (xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask)
+                        as u32,
+                    xlib::GrabModeAsync,
+                    xlib::GrabModeAsync,
+                    0,
+                    0,
+                );
+            }
+            is_dock
+        };
+
+        let mut window = Window::new(
             window_id,
             attrs.x,
             attrs.y,
@@ -684,25 +738,43 @@ impl WindowManager {
             attrs.height as u32,
         );
 
-        if let Some(workspace) = self.workspaces.get_mut(self.current_workspace) {
-            workspace.add_window(window);
-            unsafe {
+        unsafe {
+            if is_dock {
+                window.is_floating = true;
+                window.is_dock = true;
+
+                xlib::XSetWindowBorderWidth(self.display.raw(), window_id, 0);
+
+                for workspace in &mut self.workspaces {
+                    workspace.add_window(window.clone());
+                }
+
+                xlib::XMapWindow(self.display.raw(), window_id);
+                xlib::XRaiseWindow(self.display.raw(), window_id);
+
+                self.layout.update_dock_space(window.y, window.height);
+            } else if let Some(workspace) = self.workspaces.get_mut(self.current_workspace) {
+                workspace.add_window(window);
                 xlib::XMapWindow(self.display.raw(), window_id);
                 xlib::XSetWindowBorderWidth(
                     self.display.raw(),
                     window_id,
                     self.config.appearance.border_width,
                 );
-            }
-            self.layout.add_window(window_id);
-            unsafe {
+                xlib::XSetWindowBorder(
+                    self.display.raw(),
+                    window_id,
+                    self.config.get_border_color(),
+                );
+                self.layout.add_window(window_id);
                 xlib::XSync(self.display.raw(), 0);
-                xlib::XRaiseWindow(self.display.raw(), self.notification.borrow().window);
             }
-            self.raise_floating_windows();
-            unsafe {
-                xlib::XRaiseWindow(self.display.raw(), self.notification.borrow().window);
-            }
+        }
+
+        self.raise_floating_windows();
+        unsafe {
+            xlib::XRaiseWindow(self.display.raw(), self.notification.borrow().window);
+            xlib::XSync(self.display.raw(), 0);
         }
     }
 
@@ -786,8 +858,10 @@ impl WindowManager {
         info!("Switching to workspace {}", index);
         if let Some(current) = self.workspaces.get(self.current_workspace) {
             for window in &current.windows {
-                unsafe {
-                    xlib::XUnmapWindow(self.display.raw(), window.id);
+                if !window.is_dock {
+                    unsafe {
+                        xlib::XUnmapWindow(self.display.raw(), window.id);
+                    }
                 }
             }
         }
@@ -798,30 +872,37 @@ impl WindowManager {
         if let Some(new) = self.workspaces.get(self.current_workspace) {
             for window in &new.windows {
                 unsafe {
-                    xlib::XMapWindow(self.display.raw(), window.id);
-                    xlib::XSetWindowBorderWidth(
-                        self.display.raw(),
-                        window.id,
-                        self.config.appearance.border_width,
-                    );
-                    xlib::XGrabButton(
-                        self.display.raw(),
-                        1,
-                        self.config.get_modifier(),
-                        window.id,
-                        1,
-                        (xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask)
-                            as u32,
-                        xlib::GrabModeAsync,
-                        xlib::GrabModeAsync,
-                        0,
-                        0,
-                    );
+                    if !window.is_dock {
+                        xlib::XMapWindow(self.display.raw(), window.id);
+                        xlib::XSetWindowBorderWidth(
+                            self.display.raw(),
+                            window.id,
+                            self.config.appearance.border_width,
+                        );
+                        xlib::XGrabButton(
+                            self.display.raw(),
+                            1,
+                            self.config.get_modifier(),
+                            window.id,
+                            1,
+                            (xlib::ButtonPressMask
+                                | xlib::ButtonReleaseMask
+                                | xlib::PointerMotionMask) as u32,
+                            xlib::GrabModeAsync,
+                            xlib::GrabModeAsync,
+                            0,
+                            0,
+                        );
+                    }
                 }
-                self.layout.add_window(window.id);
+                if !window.is_dock {
+                    self.layout.add_window(window.id);
+                }
             }
             if let Some(focused) = new.get_focused_window() {
-                self.layout.focus_window(focused.id);
+                if !focused.is_dock {
+                    self.layout.focus_window(focused.id);
+                }
             }
             self.raise_floating_windows();
         }
