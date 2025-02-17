@@ -217,16 +217,14 @@ impl WindowManager {
                         if let Some(window) = workspace.windows.iter_mut().find(|w| w.id == dragged)
                         {
                             if window.is_floating {
-                                window.x = window.x + dx;
-                                window.y = window.y + dy;
+                                window.x = window.pre_float_x + dx;
+                                window.y = window.pre_float_y + dy;
                                 xlib::XMoveWindow(
                                     self.display.raw(),
                                     window.id,
                                     window.x,
                                     window.y,
                                 );
-                                self.drag_start_x = root_x;
-                                self.drag_start_y = root_y;
                                 return;
                             }
                         }
