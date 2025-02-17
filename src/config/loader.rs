@@ -34,6 +34,10 @@ impl Default for Config {
                     key: "c".to_string(),
                     command: Command::Close,
                 },
+                Bind {
+                    key: "space".to_string(),
+                    command: Command::ToggleFloat,
+                },
             ],
             appearance: Appearance::default(),
             logging_enabled: true,
@@ -121,6 +125,7 @@ underline_color = "#FF3333"
 #   - exit: Exit the window manager
 #   - close: Close focused window
 #   - workspace<N>: Switch to workspace N (1-10)
+#   - toggle_float: Toggle floating mode for focused window
 #   - Any other string will be executed as a command
 [[binds]]
 key = "w"
@@ -133,6 +138,10 @@ command = "spawn alacritty"
 [[binds]]
 key = "c"
 command = "close"
+
+[[binds]]
+key = "space"
+command = "toggle_float"
 
 # Workspace bindings
 [[binds]]

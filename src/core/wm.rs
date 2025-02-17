@@ -210,6 +210,28 @@ impl WindowManager {
 
             if self.dragging {
                 if let Some(dragged) = self.dragged_window {
+                    let dx = root_x - self.drag_start_x;
+                    let dy = root_y - self.drag_start_y;
+
+                    if let Some(workspace) = self.workspaces.get_mut(self.current_workspace) {
+                        if let Some(window) = workspace.windows.iter_mut().find(|w| w.id == dragged)
+                        {
+                            if window.is_floating {
+                                window.x = window.x + dx;
+                                window.y = window.y + dy;
+                                xlib::XMoveWindow(
+                                    self.display.raw(),
+                                    window.id,
+                                    window.x,
+                                    window.y,
+                                );
+                                self.drag_start_x = root_x;
+                                self.drag_start_y = root_y;
+                                return;
+                            }
+                        }
+                    }
+
                     debug!("Dragging window {} over window {}", dragged, child_return);
                     if let Some(target) = child_return.checked_sub(0).filter(|_| {
                         child_return != dragged
@@ -245,6 +267,7 @@ impl WindowManager {
             {
                 match &bind.command {
                     Command::Exit => self.running = false,
+                    Command::Close => self.close_focused_window(),
                     Command::Spawn(cmd) => {
                         if let Err(e) = ProcessCommand::new(cmd)
                             .stdout(std::process::Stdio::null())
@@ -257,8 +280,58 @@ impl WindowManager {
                             }
                         }
                     }
-                    Command::Close => self.close_focused_window(),
                     Command::Workspace(idx) => self.switch_to_workspace(*idx),
+                    Command::ToggleFloat => self.toggle_float(),
+                }
+            }
+        }
+    }
+
+    fn toggle_float(&mut self) {
+        unsafe {
+            let mut root_return: xlib::Window = 0;
+            let mut child_return: xlib::Window = 0;
+            let mut root_x: i32 = 0;
+            let mut root_y: i32 = 0;
+            let mut win_x: i32 = 0;
+            let mut win_y: i32 = 0;
+            let mut mask_return: u32 = 0;
+
+            xlib::XQueryPointer(
+                self.display.raw(),
+                self.layout.get_root(),
+                &mut root_return,
+                &mut child_return,
+                &mut root_x,
+                &mut root_y,
+                &mut win_x,
+                &mut win_y,
+                &mut mask_return,
+            );
+
+            if child_return != 0 && child_return != self.layout.get_root() {
+                if let Some(workspace) = self.workspaces.get_mut(self.current_workspace) {
+                    if let Some(window) =
+                        workspace.windows.iter_mut().find(|w| w.id == child_return)
+                    {
+                        if window.is_floating {
+                            window.is_floating = false;
+                            window.x = window.pre_float_x;
+                            window.y = window.pre_float_y;
+                            window.width = window.pre_float_width;
+                            window.height = window.pre_float_height;
+                            self.layout.add_window(window.id);
+                            self.layout.relayout();
+                        } else {
+                            window.is_floating = true;
+                            window.pre_float_x = window.x;
+                            window.pre_float_y = window.y;
+                            window.pre_float_width = window.width;
+                            window.pre_float_height = window.height;
+                            self.layout.remove_window(window.id);
+                            self.layout.relayout();
+                        }
+                    }
                 }
             }
         }
@@ -358,13 +431,13 @@ impl WindowManager {
             );
         }
 
-        let window = Window {
-            id: window_id,
-            x: attrs.x,
-            y: attrs.y,
-            width: attrs.width as u32,
-            height: attrs.height as u32,
-        };
+        let window = Window::new(
+            window_id,
+            attrs.x,
+            attrs.y,
+            attrs.width as u32,
+            attrs.height as u32,
+        );
 
         if let Some(workspace) = self.workspaces.get_mut(self.current_workspace) {
             workspace.add_window(window);

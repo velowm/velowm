@@ -49,6 +49,7 @@ pub fn get_keysym_for_key(key: &str) -> u64 {
         "7" => keysym::XK_7,
         "8" => keysym::XK_8,
         "9" => keysym::XK_9,
+        "space" => keysym::XK_space,
         _ => keysym::XK_w,
     }
     .into()
