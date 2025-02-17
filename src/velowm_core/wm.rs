@@ -229,14 +229,11 @@ impl WindowManager {
                         if let Some(window) = workspace.windows.iter_mut().find(|w| w.id == dragged)
                         {
                             if window.is_floating {
-                                window.x = window.pre_float_x + dx;
-                                window.y = window.pre_float_y + dy;
-                                xlib::XMoveWindow(
-                                    self.display.raw(),
-                                    window.id,
-                                    window.x,
-                                    window.y,
-                                );
+                                let new_x = window.pre_float_x + dx;
+                                let new_y = window.pre_float_y + dy;
+                                window.x = new_x;
+                                window.y = new_y;
+                                xlib::XMoveWindow(self.display.raw(), window.id, new_x, new_y);
                                 xlib::XRaiseWindow(self.display.raw(), window.id);
                                 return;
                             }
@@ -336,9 +333,32 @@ impl WindowManager {
                             self.layout.add_window(window.id);
                             self.layout.relayout();
                         } else {
+                            let mut win_attrs: xlib::XWindowAttributes = std::mem::zeroed();
+                            xlib::XGetWindowAttributes(
+                                self.display.raw(),
+                                window.id,
+                                &mut win_attrs,
+                            );
+
+                            let mut child_x: i32 = 0;
+                            let mut child_y: i32 = 0;
+                            let mut child: xlib::Window = 0;
+                            xlib::XTranslateCoordinates(
+                                self.display.raw(),
+                                window.id,
+                                self.layout.get_root(),
+                                0,
+                                0,
+                                &mut child_x,
+                                &mut child_y,
+                                &mut child,
+                            );
+
                             window.is_floating = true;
-                            window.pre_float_x = window.x;
-                            window.pre_float_y = window.y;
+                            window.pre_float_x = child_x;
+                            window.pre_float_y = child_y;
+                            window.x = child_x;
+                            window.y = child_y;
                             window.pre_float_width = window.width;
                             window.pre_float_height = window.height;
                             self.layout.remove_window(window.id);
@@ -560,10 +580,31 @@ impl WindowManager {
     fn start_window_drag(&mut self, event: xlib::XButtonEvent) {
         debug!("Starting window drag for window {}", event.window);
         self.dragging = true;
-        self.drag_start_x = event.x;
-        self.drag_start_y = event.y;
-        self.dragged_window = Some(event.window);
         unsafe {
+            let mut root_return: xlib::Window = 0;
+            let mut child_return: xlib::Window = 0;
+            let mut root_x: i32 = 0;
+            let mut root_y: i32 = 0;
+            let mut win_x: i32 = 0;
+            let mut win_y: i32 = 0;
+            let mut mask_return: u32 = 0;
+
+            xlib::XQueryPointer(
+                self.display.raw(),
+                self.layout.get_root(),
+                &mut root_return,
+                &mut child_return,
+                &mut root_x,
+                &mut root_y,
+                &mut win_x,
+                &mut win_y,
+                &mut mask_return,
+            );
+
+            self.drag_start_x = root_x;
+            self.drag_start_y = root_y;
+            self.dragged_window = Some(event.window);
+
             debug!("Setting grabbing cursor for window {}", event.window);
             xlib::XDefineCursor(self.display.raw(), event.window, self.cursor.grabbing());
             xlib::XSync(self.display.raw(), 0);
