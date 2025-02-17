@@ -1,7 +1,6 @@
-use x11::xinerama;
-use x11::xlib;
+use x11::{xinerama, xlib};
 
-use crate::config::Config;
+use crate::config::loader::Config;
 
 pub struct Window {
     id: xlib::Window,
@@ -23,15 +22,22 @@ pub struct MasterStackLayout {
     display: *mut xlib::Display,
     root: xlib::Window,
     master_width_ratio: f32,
+    #[allow(dead_code)]
     screen: i32,
     current_monitor: Monitor,
     config: Config,
 }
 
 impl MasterStackLayout {
-    pub fn new(display: *mut xlib::Display, root: xlib::Window, config: Config) -> Self {
-        let screen = unsafe { xlib::XDefaultScreen(display) };
-        let current_monitor = unsafe {
+    /// Creates a new master stack layout for managing window layouts.
+    ///
+    /// # Safety
+    /// - The display pointer must be valid and point to an active X display connection.
+    /// - The root window must be a valid window ID for the given display.
+    /// - The caller must ensure the display connection remains valid for the lifetime of the layout.
+    pub unsafe fn new(display: *mut xlib::Display, root: xlib::Window, config: Config) -> Self {
+        let screen = xlib::XDefaultScreen(display);
+        let current_monitor = {
             let mut num_monitors = 0;
             let monitors = xinerama::XineramaQueryScreens(display, &mut num_monitors);
 

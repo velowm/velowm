@@ -1,22 +1,27 @@
 use anyhow::Result;
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
-use std::path::PathBuf;
-use std::process::Command as ProcessCommand;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
-use std::thread;
+use std::{
+    process::Command as ProcessCommand,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::channel,
+    },
+    thread,
+};
 use x11::xlib;
 
-use crate::config::{Command, Config};
-use crate::cursor::Cursor;
-use crate::layout::MasterStackLayout;
-use crate::x::Display;
+use crate::{
+    config::{command::Command, loader::Config},
+    ui::{cursor::Cursor, layout::MasterStackLayout},
+    utils::x11::Display,
+};
 
 static SHOULD_RELOAD_CONFIG: AtomicBool = AtomicBool::new(false);
 
 pub struct WindowManager {
     display: Display,
     running: bool,
+    #[allow(dead_code)]
     cursor: Cursor,
     config: Config,
     layout: MasterStackLayout,
@@ -30,10 +35,10 @@ impl WindowManager {
         }
 
         let display = Display::new()?;
-        let cursor = Cursor::new(display.raw())?;
+        let cursor = unsafe { Cursor::new(display.raw())? };
         let config = Config::load()?;
         let root = unsafe { xlib::XDefaultRootWindow(display.raw()) };
-        let layout = MasterStackLayout::new(display.raw(), root, config.clone());
+        let layout = unsafe { MasterStackLayout::new(display.raw(), root, config.clone()) };
 
         let (tx, rx) = channel();
         let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
@@ -49,7 +54,7 @@ impl WindowManager {
 
         let pid = std::process::id();
         thread::spawn(move || {
-            while let Ok(_) = rx.recv() {
+            while rx.recv().is_ok() {
                 thread::sleep(std::time::Duration::from_millis(100));
                 if let Ok(mut cmd) = ProcessCommand::new("kill")
                     .arg("-SIGUSR1")
@@ -96,12 +101,7 @@ impl WindowManager {
         let root = unsafe { xlib::XDefaultRootWindow(self.display.raw()) };
 
         unsafe {
-            xlib::XUngrabKey(
-                self.display.raw(),
-                xlib::AnyKey as i32,
-                xlib::AnyModifier,
-                root,
-            );
+            xlib::XUngrabKey(self.display.raw(), xlib::AnyKey, xlib::AnyModifier, root);
 
             Self::setup_key_bindings(self.display.raw(), root, &new_config);
 
@@ -215,7 +215,6 @@ impl WindowManager {
             let mut win_x: i32 = 0;
             let mut win_y: i32 = 0;
             let mut mask_return: u32 = 0;
-            let mut window_under_pointer: xlib::Window = 0;
 
             xlib::XQueryPointer(
                 self.display.raw(),
@@ -229,26 +228,18 @@ impl WindowManager {
                 &mut mask_return,
             );
 
-            window_under_pointer = child_return;
-
-            if window_under_pointer != 0 && window_under_pointer != self.layout.get_root() {
-                let wm_protocols = xlib::XInternAtom(
-                    self.display.raw(),
-                    "WM_PROTOCOLS\0".as_ptr() as *const i8,
-                    0,
-                );
-                let wm_delete_window = xlib::XInternAtom(
-                    self.display.raw(),
-                    "WM_DELETE_WINDOW\0".as_ptr() as *const i8,
-                    0,
-                );
+            if child_return != 0 && child_return != self.layout.get_root() {
+                let wm_protocols =
+                    xlib::XInternAtom(self.display.raw(), c"WM_PROTOCOLS".as_ptr(), 0);
+                let wm_delete_window =
+                    xlib::XInternAtom(self.display.raw(), c"WM_DELETE_WINDOW".as_ptr(), 0);
 
                 let mut protocols: *mut xlib::Atom = std::ptr::null_mut();
                 let mut num_protocols: i32 = 0;
 
                 if xlib::XGetWMProtocols(
                     self.display.raw(),
-                    window_under_pointer,
+                    child_return,
                     &mut protocols,
                     &mut num_protocols,
                 ) != 0
@@ -256,7 +247,7 @@ impl WindowManager {
                     let protocols_slice =
                         std::slice::from_raw_parts(protocols, num_protocols as usize);
                     if protocols_slice.contains(&wm_delete_window) {
-                        let mut data: xlib::ClientMessageData = unsafe { std::mem::zeroed() };
+                        let mut data: xlib::ClientMessageData = std::mem::zeroed();
                         data.set_long(0, wm_delete_window as i64);
 
                         let mut event = xlib::XEvent {
@@ -265,25 +256,19 @@ impl WindowManager {
                                 serial: 0,
                                 send_event: 1,
                                 display: self.display.raw(),
-                                window: window_under_pointer,
+                                window: child_return,
                                 message_type: wm_protocols,
                                 format: 32,
                                 data,
                             },
                         };
-                        xlib::XSendEvent(
-                            self.display.raw(),
-                            window_under_pointer,
-                            0,
-                            0,
-                            &mut event,
-                        );
+                        xlib::XSendEvent(self.display.raw(), child_return, 0, 0, &mut event);
                     } else {
-                        xlib::XDestroyWindow(self.display.raw(), window_under_pointer);
+                        xlib::XDestroyWindow(self.display.raw(), child_return);
                     }
                     xlib::XFree(protocols as *mut _);
                 } else {
-                    xlib::XDestroyWindow(self.display.raw(), window_under_pointer);
+                    xlib::XDestroyWindow(self.display.raw(), child_return);
                 }
                 xlib::XSync(self.display.raw(), 0);
             }
