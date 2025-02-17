@@ -79,6 +79,8 @@ modifier = "alt"
 border_width = 2
 # Border color in hex format (supports transparency)
 border_color = "#7A8478"
+# Gap between windows in pixels
+gaps = 8
 
 # Keybindings
 # Format: bind = key,command

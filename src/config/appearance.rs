@@ -6,6 +6,8 @@ pub struct Appearance {
     pub border_width: u32,
     #[serde(default = "default_border_color")]
     pub border_color: String,
+    #[serde(default = "default_gaps")]
+    pub gaps: u32,
 }
 
 fn default_border_width() -> u32 {
@@ -14,6 +16,10 @@ fn default_border_width() -> u32 {
 
 fn default_border_color() -> String {
     String::from("#7A8478")
+}
+
+fn default_gaps() -> u32 {
+    8
 }
 
 impl Appearance {
