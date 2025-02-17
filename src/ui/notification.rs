@@ -40,7 +40,7 @@ impl NotificationWindow {
             xlib::XSetFont(display, gc, (*font).fid);
         }
 
-        xlib::XSelectInput(display, window, xlib::ExposureMask);
+        xlib::XSelectInput(display, window, xlib::ExposureMask | xlib::ButtonPressMask);
 
         Self {
             display,
@@ -85,6 +85,15 @@ impl NotificationWindow {
     pub unsafe fn hide(&self) {
         xlib::XUnmapWindow(self.display, self.window);
         xlib::XFlush(self.display);
+    }
+
+    /// Handles a button press event on the notification window
+    ///
+    /// # Safety
+    /// - The display connection must still be valid
+    /// - The window must not have been destroyed
+    pub unsafe fn handle_button_press(&self) {
+        self.hide();
     }
 }
 

@@ -131,7 +131,11 @@ impl WindowManager {
                         "Button press: window={}, button={}, state={}",
                         button_event.window, button_event.button, button_event.state
                     );
-                    if button_event.state & self.config.get_modifier() != 0 {
+                    if button_event.window == self.notification.window {
+                        unsafe {
+                            self.notification.handle_button_press();
+                        }
+                    } else if button_event.state & self.config.get_modifier() != 0 {
                         match button_event.button {
                             1 => self.start_window_drag(button_event),
                             3 => self.start_window_resize(button_event),
