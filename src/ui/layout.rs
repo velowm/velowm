@@ -186,7 +186,7 @@ impl MasterStackLayout {
         let border_offset = self.config.appearance.border_width * 2;
         let gaps = self.config.appearance.gaps;
         let bar_height = if self.config.appearance.bar.enabled {
-            20
+            self.config.appearance.bar.height
         } else {
             0
         };
