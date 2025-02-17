@@ -92,6 +92,8 @@ gaps = 8
 [appearance.bar]
 # Enable or disable the status bar
 enabled = true
+# Bar height in pixels
+height = 24
 # Bar background color
 background_color = "#000000"
 # Bar text color

@@ -20,7 +20,7 @@ impl StatusBar {
         screen_width: u32,
         config: Bar,
     ) -> Self {
-        let height = 20;
+        let height = config.height;
         let black = xlib::XBlackPixel(display, xlib::XDefaultScreen(display));
 
         let window = xlib::XCreateSimpleWindow(

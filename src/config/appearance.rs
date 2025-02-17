@@ -4,6 +4,8 @@ use serde::Deserialize;
 pub struct Bar {
     #[serde(default)]
     pub enabled: bool,
+    #[serde(default = "default_bar_height")]
+    pub height: u32,
     #[serde(default = "default_bar_background_color")]
     pub background_color: String,
     #[serde(default = "default_bar_text_color")]
@@ -82,6 +84,10 @@ fn default_bar_highlight_color() -> String {
 
 fn default_bar_underline_color() -> String {
     String::from("#FF3333")
+}
+
+fn default_bar_height() -> u32 {
+    24
 }
 
 impl Appearance {
