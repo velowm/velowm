@@ -1,4 +1,4 @@
-pub mod core {
+pub mod velowm_core {
     pub mod window;
     pub mod wm;
     pub mod workspace;
@@ -32,4 +32,4 @@ pub mod config {
 }
 
 pub use config::loader::Config;
-pub use core::{window::Window, wm::WindowManager};
+pub use velowm_core::{window::Window, wm::WindowManager};

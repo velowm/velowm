@@ -1,7 +1,7 @@
 use anyhow::Result;
 use log::error;
 use std::{env, process};
-use velowm::{core::wm::WindowManager, Config};
+use velowm::{velowm_core::wm::WindowManager, Config};
 
 fn main() -> Result<()> {
     let config = Config::load().unwrap_or_default();
