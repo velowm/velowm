@@ -24,6 +24,10 @@ pub struct WindowManager {
     workspaces: Vec<Workspace>,
     current_workspace: usize,
     status_bar: StatusBar,
+    dragging: bool,
+    drag_start_x: i32,
+    drag_start_y: i32,
+    dragged_window: Option<xlib::Window>,
 }
 
 impl WindowManager {
@@ -62,7 +66,7 @@ impl WindowManager {
         };
 
         unsafe {
-            xlib::XDefineCursor(display.raw(), root, cursor.raw());
+            xlib::XDefineCursor(display.raw(), root, cursor.normal());
 
             Self::setup_key_bindings(display.raw(), root, &config);
 
@@ -92,6 +96,10 @@ impl WindowManager {
             workspaces,
             current_workspace: 0,
             status_bar,
+            dragging: false,
+            drag_start_x: 0,
+            drag_start_y: 0,
+            dragged_window: None,
         })
     }
 
@@ -108,6 +116,7 @@ impl WindowManager {
                 xlib::GrabModeAsync,
             );
         }
+
         xlib::XSync(display, 0);
     }
 
@@ -130,6 +139,10 @@ impl WindowManager {
                 xlib::MotionNotify => self.handle_motion_notify(event),
                 xlib::ButtonPress => {
                     let button_event: xlib::XButtonEvent = From::from(event);
+                    debug!(
+                        "Button press: window={}, button={}, state={}",
+                        button_event.window, button_event.button, button_event.state
+                    );
                     if button_event.window == self.status_bar.window {
                         if let Some(workspace) = self
                             .status_bar
@@ -137,6 +150,20 @@ impl WindowManager {
                         {
                             self.switch_to_workspace(workspace);
                         }
+                    } else if button_event.button == xlib::Button1
+                        && button_event.state & self.config.get_modifier() != 0
+                    {
+                        debug!(
+                            "Starting drag: modifier pressed={}, expected={}",
+                            button_event.state & self.config.get_modifier(),
+                            self.config.get_modifier()
+                        );
+                        self.start_window_drag(button_event);
+                    }
+                }
+                xlib::ButtonRelease => {
+                    if self.dragging {
+                        self.end_window_drag();
                     }
                 }
                 xlib::EnterNotify => self.handle_enter_notify(event),
@@ -159,7 +186,7 @@ impl WindowManager {
     }
 
     fn handle_motion_notify(&mut self, event: xlib::XEvent) {
-        let _motion_event: xlib::XMotionEvent = From::from(event);
+        let motion_event: xlib::XMotionEvent = From::from(event);
         unsafe {
             let mut root_return: xlib::Window = 0;
             let mut child_return: xlib::Window = 0;
@@ -181,7 +208,21 @@ impl WindowManager {
                 &mut mask_return,
             );
 
-            if child_return != 0 && child_return != self.layout.get_root() {
+            if self.dragging {
+                if let Some(dragged) = self.dragged_window {
+                    debug!("Dragging window {} over window {}", dragged, child_return);
+                    if let Some(target) = child_return.checked_sub(0).filter(|_| {
+                        child_return != dragged
+                            && child_return != 0
+                            && child_return != self.layout.get_root()
+                    }) {
+                        debug!("Swapping windows {} and {}", dragged, target);
+                        self.layout.swap_windows(dragged, target);
+                        self.layout.relayout();
+                        xlib::XSync(self.display.raw(), 0);
+                    }
+                }
+            } else if child_return != 0 && child_return != self.layout.get_root() {
                 self.layout.focus_window(child_return);
             }
         }
@@ -301,6 +342,20 @@ impl WindowManager {
         let mut attrs: xlib::XWindowAttributes = unsafe { std::mem::zeroed() };
         unsafe {
             xlib::XGetWindowAttributes(self.display.raw(), window_id, &mut attrs);
+
+            debug!("Grabbing button for window {}", window_id);
+            xlib::XGrabButton(
+                self.display.raw(),
+                1,
+                self.config.get_modifier(),
+                window_id,
+                1,
+                (xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask) as u32,
+                xlib::GrabModeAsync,
+                xlib::GrabModeAsync,
+                0,
+                0,
+            );
         }
 
         let window = Window {
@@ -346,7 +401,8 @@ impl WindowManager {
 
     fn handle_enter_notify(&mut self, event: xlib::XEvent) {
         let enter_event: xlib::XCrossingEvent = From::from(event);
-        if enter_event.window != 0 && enter_event.window != self.layout.get_root() {
+        if !self.dragging && enter_event.window != 0 && enter_event.window != self.layout.get_root()
+        {
             self.layout.focus_window(enter_event.window);
         }
     }
@@ -384,6 +440,19 @@ impl WindowManager {
                         window.id,
                         self.config.appearance.border_width,
                     );
+                    xlib::XGrabButton(
+                        self.display.raw(),
+                        1,
+                        self.config.get_modifier(),
+                        window.id,
+                        1,
+                        (xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask)
+                            as u32,
+                        xlib::GrabModeAsync,
+                        xlib::GrabModeAsync,
+                        0,
+                        0,
+                    );
                 }
                 self.layout.add_window(window.id);
             }
@@ -397,5 +466,31 @@ impl WindowManager {
             self.status_bar.draw(self.current_workspace);
             xlib::XSync(self.display.raw(), 0);
         }
+    }
+
+    fn start_window_drag(&mut self, event: xlib::XButtonEvent) {
+        debug!("Starting window drag for window {}", event.window);
+        self.dragging = true;
+        self.drag_start_x = event.x;
+        self.drag_start_y = event.y;
+        self.dragged_window = Some(event.window);
+        unsafe {
+            debug!("Setting grabbing cursor for window {}", event.window);
+            xlib::XDefineCursor(self.display.raw(), event.window, self.cursor.grabbing());
+            xlib::XSync(self.display.raw(), 0);
+        }
+    }
+
+    fn end_window_drag(&mut self) {
+        if let Some(window) = self.dragged_window {
+            debug!("Ending window drag for window {}", window);
+            unsafe {
+                debug!("Resetting cursor for window {}", window);
+                xlib::XDefineCursor(self.display.raw(), window, self.cursor.normal());
+                xlib::XSync(self.display.raw(), 0);
+            }
+        }
+        self.dragging = false;
+        self.dragged_window = None;
     }
 }

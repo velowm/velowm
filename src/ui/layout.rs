@@ -253,4 +253,14 @@ impl MasterStackLayout {
             }
         }
     }
+
+    pub fn swap_windows(&mut self, window1: xlib::Window, window2: xlib::Window) {
+        if let (Some(idx1), Some(idx2)) = (
+            self.windows.iter().position(|w| w.id == window1),
+            self.windows.iter().position(|w| w.id == window2),
+        ) {
+            self.windows.swap(idx1, idx2);
+            self.relayout();
+        }
+    }
 }
