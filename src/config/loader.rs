@@ -20,6 +20,8 @@ pub struct Config {
     pub logging_enabled: bool,
     #[serde(default = "default_auto_generated")]
     pub auto_generated: bool,
+    #[serde(default = "default_notifications_enabled")]
+    pub notifications_enabled: bool,
 }
 
 fn default_logging_enabled() -> bool {
@@ -28,6 +30,10 @@ fn default_logging_enabled() -> bool {
 
 fn default_auto_generated() -> bool {
     false
+}
+
+fn default_notifications_enabled() -> bool {
+    true
 }
 
 impl Default for Config {
@@ -59,6 +65,7 @@ impl Default for Config {
             appearance: Appearance::default(),
             logging_enabled: true,
             auto_generated: true,
+            notifications_enabled: true,
         }
     }
 }
@@ -111,6 +118,9 @@ logging_enabled = true
 
 # Set to false to disable the popup notification
 auto_generated = true
+
+# Enable or disable notifications
+notifications_enabled = true
 
 # Window appearance
 [appearance]

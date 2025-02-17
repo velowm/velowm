@@ -51,12 +51,14 @@ impl WindowManager {
 
         if let Err(e) = Config::load() {
             error!("Failed to load config: {}", e);
-            unsafe {
-                notification.show_error(&format!("Failed to load config: {}", e));
+            if config.notifications_enabled {
+                unsafe {
+                    notification.show_error(&format!("Failed to load config: {}", e));
+                }
             }
         }
 
-        if config.auto_generated {
+        if config.auto_generated && config.notifications_enabled {
             unsafe {
                 notification.show_error(
                     "You are using an auto generated config\n\
@@ -399,10 +401,12 @@ impl WindowManager {
                             .stderr(std::process::Stdio::null())
                             .spawn()
                         {
-                            unsafe {
-                                self.notification
-                                    .borrow_mut()
-                                    .show_error(&format!("Failed to spawn {}: {}", cmd, e));
+                            if self.config.notifications_enabled {
+                                unsafe {
+                                    self.notification
+                                        .borrow_mut()
+                                        .show_error(&format!("Failed to spawn {}: {}", cmd, e));
+                                }
                             }
                         }
                     }
