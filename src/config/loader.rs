@@ -18,10 +18,16 @@ pub struct Config {
     pub appearance: Appearance,
     #[serde(default = "default_logging_enabled")]
     pub logging_enabled: bool,
+    #[serde(default = "default_auto_generated")]
+    pub auto_generated: bool,
 }
 
 fn default_logging_enabled() -> bool {
     true
+}
+
+fn default_auto_generated() -> bool {
+    false
 }
 
 impl Default for Config {
@@ -34,6 +40,10 @@ impl Default for Config {
                     command: Command::Exit,
                 },
                 Bind {
+                    key: "q".to_string(),
+                    command: Command::Spawn("alacritty".to_string()),
+                },
+                Bind {
                     key: "c".to_string(),
                     command: Command::Close,
                 },
@@ -44,6 +54,7 @@ impl Default for Config {
             ],
             appearance: Appearance::default(),
             logging_enabled: true,
+            auto_generated: true,
         }
     }
 }
@@ -93,6 +104,9 @@ modifier = "alt"
 
 # Enable or disable logging
 logging_enabled = true
+
+# Set to false to disable the popup notification
+auto_generated = true
 
 # Window appearance
 [appearance]
