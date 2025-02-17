@@ -20,13 +20,14 @@ impl NotificationWindow {
         let screen = xlib::XDefaultScreen(display);
         let black = xlib::XBlackPixel(display, screen);
         let white = xlib::XWhitePixel(display, screen);
+        let red = 0xFF0000;
 
         let width = 600;
         let height = 50;
         let x = (xlib::XDisplayWidth(display, screen) - width as i32) / 2;
         let y = 50;
 
-        let window = xlib::XCreateSimpleWindow(display, root, x, y, width, height, 1, black, white);
+        let window = xlib::XCreateSimpleWindow(display, root, x, y, width, height, 2, red, white);
 
         let gc = xlib::XCreateGC(display, window, 0, std::ptr::null_mut());
         xlib::XSetForeground(display, gc, black);
