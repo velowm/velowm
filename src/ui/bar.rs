@@ -151,6 +151,19 @@ impl StatusBar {
 
             x += self.workspace_width + 5;
         }
+
+        if self.config.show_underline {
+            xlib::XSetForeground(self.display, self.gc, self.config.get_underline_color());
+            xlib::XFillRectangle(
+                self.display,
+                self.window,
+                self.gc,
+                0,
+                self.height as i32 - 2,
+                self.width,
+                2,
+            );
+        }
     }
 }
 

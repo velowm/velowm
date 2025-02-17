@@ -98,6 +98,10 @@ background_color = "#0F0F0F"
 text_color = "#ABB2BF"
 # Active workspace highlight color
 highlight_color = "#3E4451"
+# Show underline
+show_underline = true
+# Underline color
+underline_color = "#3E4451"
 
 # Keybindings
 # Format: bind = key,command

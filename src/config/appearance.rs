@@ -10,6 +10,10 @@ pub struct Bar {
     pub text_color: String,
     #[serde(default = "default_bar_highlight_color")]
     pub highlight_color: String,
+    #[serde(default)]
+    pub show_underline: bool,
+    #[serde(default = "default_bar_underline_color")]
+    pub underline_color: String,
 }
 
 impl Bar {
@@ -25,6 +29,11 @@ impl Bar {
 
     pub fn get_highlight_color(&self) -> u64 {
         let color = self.highlight_color.trim_start_matches('#');
+        u64::from_str_radix(color, 16).unwrap_or(0x3E4451)
+    }
+
+    pub fn get_underline_color(&self) -> u64 {
+        let color = self.underline_color.trim_start_matches('#');
         u64::from_str_radix(color, 16).unwrap_or(0x3E4451)
     }
 }
@@ -68,6 +77,10 @@ fn default_bar_text_color() -> String {
 }
 
 fn default_bar_highlight_color() -> String {
+    String::from("#3E4451")
+}
+
+fn default_bar_underline_color() -> String {
     String::from("#3E4451")
 }
 
