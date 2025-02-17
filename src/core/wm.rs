@@ -205,7 +205,11 @@ impl WindowManager {
                 match &bind.command {
                     Command::Exit => self.running = false,
                     Command::Spawn(cmd) => {
-                        if let Err(e) = ProcessCommand::new(cmd).spawn() {
+                        if let Err(e) = ProcessCommand::new(cmd)
+                            .stdout(std::process::Stdio::null())
+                            .stderr(std::process::Stdio::null())
+                            .spawn()
+                        {
                             unsafe {
                                 self.notification
                                     .show_error(&format!("Failed to spawn {}: {}", cmd, e));
