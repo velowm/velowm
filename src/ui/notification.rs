@@ -7,6 +7,9 @@ pub struct NotificationWindow {
     gc: xlib::GC,
     font: *mut xlib::XFontStruct,
     current_message: Option<String>,
+    line_height: i32,
+    padding: i32,
+    width: i32,
 }
 
 impl NotificationWindow {
@@ -22,15 +25,24 @@ impl NotificationWindow {
         let red = 0xFF0000;
         let dark_gray = 0x0F0F0F;
 
-        let width = 600;
-        let line_height = 20;
-        let padding = 10;
-        let height = line_height * 5 + padding * 2;
-        let x = (xlib::XDisplayWidth(display, screen) - width as i32) / 2;
+        let width = 600i32;
+        let line_height = 20i32;
+        let padding = 10i32;
+        let initial_height = line_height + padding * 2;
+        let x = (xlib::XDisplayWidth(display, screen) - width) / 2;
         let y = 50;
 
-        let window =
-            xlib::XCreateSimpleWindow(display, root, x, y, width, height, 2, red, dark_gray);
+        let window = xlib::XCreateSimpleWindow(
+            display,
+            root,
+            x,
+            y,
+            width as u32,
+            initial_height as u32,
+            2,
+            red,
+            dark_gray,
+        );
 
         let mut attrs: xlib::XSetWindowAttributes = std::mem::zeroed();
         attrs.override_redirect = 1;
@@ -96,6 +108,9 @@ impl NotificationWindow {
             gc,
             font,
             current_message: None,
+            line_height,
+            padding,
+            width,
         }
     }
 
@@ -106,6 +121,22 @@ impl NotificationWindow {
     /// - The window must not have been destroyed
     pub unsafe fn show_error(&mut self, message: &str) {
         self.current_message = Some(message.to_string());
+
+        let lines: Vec<&str> = message.split('\n').collect();
+        let new_height = self.line_height * lines.len() as i32 + self.padding * 2;
+
+        xlib::XResizeWindow(
+            self.display,
+            self.window,
+            self.width as u32,
+            new_height as u32,
+        );
+
+        let screen = xlib::XDefaultScreen(self.display);
+        let x = (xlib::XDisplayWidth(self.display, screen) - self.width) / 2;
+        let y = 50;
+        xlib::XMoveWindow(self.display, self.window, x, y);
+
         xlib::XMapWindow(self.display, self.window);
         xlib::XRaiseWindow(self.display, self.window);
 
@@ -131,22 +162,20 @@ impl NotificationWindow {
             xlib::XClearWindow(self.display, self.window);
 
             let lines: Vec<&str> = message.split('\n').collect();
-            let line_height = 20;
-            let x = 10;
-            let mut y = 25;
+            let mut y = self.padding + self.line_height - 5;
 
             for line in lines {
-                let line = CString::new(line).unwrap();
+                let line = CString::new(line.trim()).unwrap();
                 xlib::XDrawString(
                     self.display,
                     self.window,
                     self.gc,
-                    x,
+                    self.padding,
                     y,
                     line.as_ptr(),
                     line.as_bytes().len() as i32,
                 );
-                y += line_height;
+                y += self.line_height;
             }
 
             xlib::XFlush(self.display);

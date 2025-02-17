@@ -61,6 +61,7 @@ impl WindowManager {
                     \n\
                     Press Alt+Q to open alacritty\n\
                     Press Alt+W to exit\n\
+                    \n\
                     Press on this to dismiss this message",
                 );
             }
