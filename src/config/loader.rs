@@ -105,23 +105,6 @@ focused_border_color = "#FF0000"
 # Gap between windows in pixels
 gaps = 8
 
-# Status bar settings
-[appearance.bar]
-# Enable or disable the status bar
-enabled = true
-# Bar height in pixels
-height = 24
-# Bar background color
-background_color = "#000000"
-# Bar text color
-text_color = "#CCCCCC"
-# Active workspace highlight color
-highlight_color = "#800000"
-# Show underline
-show_underline = false
-# Underline color
-underline_color = "#FF3333"
-
 # Floating window settings
 [appearance.floating]
 # Center windows when they become floating

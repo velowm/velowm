@@ -1,24 +1,6 @@
 use serde::Deserialize;
 
 #[derive(Deserialize, Default, Clone)]
-pub struct Bar {
-    #[serde(default)]
-    pub enabled: bool,
-    #[serde(default = "default_bar_height")]
-    pub height: u32,
-    #[serde(default = "default_bar_background_color")]
-    pub background_color: String,
-    #[serde(default = "default_bar_text_color")]
-    pub text_color: String,
-    #[serde(default = "default_bar_highlight_color")]
-    pub highlight_color: String,
-    #[serde(default)]
-    pub show_underline: bool,
-    #[serde(default = "default_bar_underline_color")]
-    pub underline_color: String,
-}
-
-#[derive(Deserialize, Default, Clone)]
 pub struct FloatingWindow {
     #[serde(default)]
     pub center_on_float: bool,
@@ -38,8 +20,6 @@ pub struct Appearance {
     pub focused_border_color: String,
     #[serde(default = "default_gaps")]
     pub gaps: u32,
-    #[serde(default)]
-    pub bar: Bar,
     #[serde(default)]
     pub floating: FloatingWindow,
 }
@@ -61,43 +41,6 @@ fn default_float_width() -> u32 {
 }
 fn default_float_height() -> u32 {
     600
-}
-fn default_bar_height() -> u32 {
-    24
-}
-fn default_bar_background_color() -> String {
-    String::from("#000000")
-}
-fn default_bar_text_color() -> String {
-    String::from("#CCCCCC")
-}
-fn default_bar_highlight_color() -> String {
-    String::from("#800000")
-}
-fn default_bar_underline_color() -> String {
-    String::from("#FF3333")
-}
-
-impl Bar {
-    pub fn get_background_color(&self) -> u64 {
-        let color = self.background_color.trim_start_matches('#');
-        u64::from_str_radix(color, 16).unwrap_or(0x282C34)
-    }
-
-    pub fn get_text_color(&self) -> u64 {
-        let color = self.text_color.trim_start_matches('#');
-        u64::from_str_radix(color, 16).unwrap_or(0xABB2BF)
-    }
-
-    pub fn get_highlight_color(&self) -> u64 {
-        let color = self.highlight_color.trim_start_matches('#');
-        u64::from_str_radix(color, 16).unwrap_or(0x3E4451)
-    }
-
-    pub fn get_underline_color(&self) -> u64 {
-        let color = self.underline_color.trim_start_matches('#');
-        u64::from_str_radix(color, 16).unwrap_or(0x3E4451)
-    }
 }
 
 impl Appearance {

@@ -5,9 +5,7 @@ use x11::{xinerama, xlib};
 
 use crate::{
     config::loader::Config,
-    ui::{
-        bar::StatusBar, cursor::Cursor, layout::MasterStackLayout, notification::NotificationWindow,
-    },
+    ui::{cursor::Cursor, layout::MasterStackLayout, notification::NotificationWindow},
     utils::{command::Command, x11::Display},
 };
 
@@ -23,7 +21,6 @@ pub struct WindowManager {
     notification: NotificationWindow,
     workspaces: Vec<Workspace>,
     current_workspace: usize,
-    status_bar: StatusBar,
     dragging: bool,
     drag_start_x: i32,
     drag_start_y: i32,
@@ -57,18 +54,6 @@ impl WindowManager {
             }
         }
 
-        let screen_width = unsafe {
-            xlib::XDisplayWidth(display.raw(), xlib::XDefaultScreen(display.raw())) as u32
-        };
-        let status_bar = unsafe {
-            StatusBar::new(
-                display.raw(),
-                root,
-                screen_width,
-                config.appearance.bar.clone(),
-            )
-        };
-
         unsafe {
             xlib::XDefineCursor(display.raw(), root, cursor.normal());
 
@@ -99,7 +84,6 @@ impl WindowManager {
             notification,
             workspaces,
             current_workspace: 0,
-            status_bar,
             dragging: false,
             drag_start_x: 0,
             drag_start_y: 0,
@@ -129,10 +113,6 @@ impl WindowManager {
     }
 
     pub fn run(&mut self) -> Result<()> {
-        unsafe {
-            self.status_bar.draw(self.current_workspace);
-        }
-
         while self.running {
             let mut event: xlib::XEvent = unsafe { std::mem::zeroed() };
             unsafe {
@@ -151,14 +131,7 @@ impl WindowManager {
                         "Button press: window={}, button={}, state={}",
                         button_event.window, button_event.button, button_event.state
                     );
-                    if button_event.window == self.status_bar.window {
-                        if let Some(workspace) = self
-                            .status_bar
-                            .get_clicked_workspace(button_event.x, button_event.y)
-                        {
-                            self.switch_to_workspace(workspace);
-                        }
-                    } else if button_event.state & self.config.get_modifier() != 0 {
+                    if button_event.state & self.config.get_modifier() != 0 {
                         match button_event.button {
                             1 => self.start_window_drag(button_event),
                             3 => self.start_window_resize(button_event),
@@ -179,10 +152,6 @@ impl WindowManager {
                     let expose_event: xlib::XExposeEvent = From::from(event);
                     if expose_event.window == self.notification.window {
                         // TODO: Store last error message and redraw it here
-                    } else if expose_event.window == self.status_bar.window {
-                        unsafe {
-                            self.status_bar.draw(self.current_workspace);
-                        }
                     }
                 }
                 _ => (),
@@ -394,12 +363,6 @@ impl WindowManager {
                             if self.config.appearance.floating.center_on_float {
                                 let float_width = self.config.appearance.floating.width;
                                 let float_height = self.config.appearance.floating.height;
-                                let bar_height = if self.config.appearance.bar.enabled {
-                                    self.config.appearance.bar.height
-                                } else {
-                                    0
-                                };
-
                                 let mut num_monitors = 0;
                                 let monitors = xinerama::XineramaQueryScreens(
                                     self.display.raw(),
@@ -425,8 +388,7 @@ impl WindowManager {
                                         + ((current_monitor.width as u32 - float_width) / 2) as i32;
                                     let new_y = current_monitor.y_org as i32
                                         + ((current_monitor.height as u32 - float_height) / 2)
-                                            as i32
-                                        + bar_height as i32;
+                                            as i32;
 
                                     window.width = float_width;
                                     window.height = float_height;
@@ -449,8 +411,7 @@ impl WindowManager {
                                         as u32;
 
                                     let new_x = ((screen_width - float_width) / 2) as i32;
-                                    let new_y =
-                                        ((screen_height - float_height) / 2 + bar_height) as i32;
+                                    let new_y = ((screen_height - float_height) / 2) as i32;
 
                                     window.width = float_width;
                                     window.height = float_height;
@@ -724,7 +685,6 @@ impl WindowManager {
 
         self.layout.relayout();
         unsafe {
-            self.status_bar.draw(self.current_workspace);
             xlib::XSync(self.display.raw(), 0);
         }
     }
