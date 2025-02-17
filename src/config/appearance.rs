@@ -6,6 +6,8 @@ pub struct Appearance {
     pub border_width: u32,
     #[serde(default = "default_border_color")]
     pub border_color: String,
+    #[serde(default = "default_focused_border_color")]
+    pub focused_border_color: String,
     #[serde(default = "default_gaps")]
     pub gaps: u32,
 }
@@ -18,6 +20,10 @@ fn default_border_color() -> String {
     String::from("#7A8478")
 }
 
+fn default_focused_border_color() -> String {
+    String::from("#A7C080")
+}
+
 fn default_gaps() -> u32 {
     8
 }
@@ -26,5 +32,10 @@ impl Appearance {
     pub fn get_border_color(&self) -> u64 {
         let color = self.border_color.trim_start_matches('#');
         u64::from_str_radix(color, 16).unwrap_or(0x7A8478)
+    }
+
+    pub fn get_focused_border_color(&self) -> u64 {
+        let color = self.focused_border_color.trim_start_matches('#');
+        u64::from_str_radix(color, 16).unwrap_or(0xA7C080)
     }
 }

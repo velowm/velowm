@@ -47,6 +47,10 @@ impl Config {
         self.appearance.get_border_color()
     }
 
+    pub fn get_focused_border_color(&self) -> u64 {
+        self.appearance.get_focused_border_color()
+    }
+
     pub fn load() -> Result<Self> {
         let config_path = Self::get_config_path()?;
 
@@ -79,6 +83,8 @@ modifier = "alt"
 border_width = 2
 # Border color in hex format (supports transparency)
 border_color = "#7A8478"
+# Border color for focused windows
+focused_border_color = "#A7C080"
 # Gap between windows in pixels
 gaps = 8
 

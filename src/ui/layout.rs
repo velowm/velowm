@@ -26,6 +26,7 @@ pub struct MasterStackLayout {
     screen: i32,
     current_monitor: Monitor,
     config: Config,
+    focused_window: Option<xlib::Window>,
 }
 
 impl MasterStackLayout {
@@ -69,6 +70,7 @@ impl MasterStackLayout {
             screen,
             current_monitor,
             config,
+            focused_window: None,
         }
     }
 
@@ -76,10 +78,40 @@ impl MasterStackLayout {
         self.root
     }
 
+    pub fn focus_window(&mut self, window: xlib::Window) {
+        if window == self.root {
+            return;
+        }
+
+        unsafe {
+            if let Some(old_focused) = self.focused_window {
+                xlib::XSetWindowBorder(self.display, old_focused, self.config.get_border_color());
+            }
+
+            xlib::XSetWindowBorder(self.display, window, self.config.get_focused_border_color());
+            xlib::XSetInputFocus(
+                self.display,
+                window,
+                xlib::RevertToPointerRoot,
+                xlib::CurrentTime,
+            );
+            xlib::XRaiseWindow(self.display, window);
+            xlib::XSync(self.display, 0);
+        }
+
+        self.focused_window = Some(window);
+    }
+
     pub fn add_window(&mut self, window: xlib::Window) {
         unsafe {
             xlib::XSetWindowBorderWidth(self.display, window, self.config.appearance.border_width);
             xlib::XSetWindowBorder(self.display, window, self.config.get_border_color());
+
+            xlib::XSelectInput(
+                self.display,
+                window,
+                xlib::EnterWindowMask | xlib::LeaveWindowMask | xlib::FocusChangeMask,
+            );
         }
 
         let mut attrs: xlib::XWindowAttributes = unsafe { std::mem::zeroed() };
@@ -97,9 +129,16 @@ impl MasterStackLayout {
 
         self.windows.push(new_window);
         self.relayout();
+        self.focus_window(window);
     }
 
     pub fn remove_window(&mut self, window: xlib::Window) {
+        if self.focused_window == Some(window) {
+            self.focused_window = None;
+            if let Some(last_window) = self.windows.iter().find(|w| w.id != window) {
+                self.focus_window(last_window.id);
+            }
+        }
         self.windows.retain(|w| w.id != window);
         self.relayout();
     }

@@ -182,6 +182,8 @@ impl WindowManager {
                 xlib::UnmapNotify => self.handle_unmap_notify(event),
                 xlib::DestroyNotify => self.handle_destroy_notify(event),
                 xlib::MotionNotify => self.handle_motion_notify(event),
+                xlib::EnterNotify => self.handle_enter_notify(event),
+                xlib::LeaveNotify => self.handle_leave_notify(event),
                 xlib::Expose => {
                     let expose_event: xlib::XExposeEvent = From::from(event);
                     if expose_event.window == self.notification.window {
@@ -198,12 +200,29 @@ impl WindowManager {
     fn handle_motion_notify(&mut self, event: xlib::XEvent) {
         let motion_event: xlib::XMotionEvent = From::from(event);
         unsafe {
-            xlib::XSetInputFocus(
+            let mut root_return: xlib::Window = 0;
+            let mut child_return: xlib::Window = 0;
+            let mut root_x: i32 = 0;
+            let mut root_y: i32 = 0;
+            let mut win_x: i32 = 0;
+            let mut win_y: i32 = 0;
+            let mut mask_return: u32 = 0;
+
+            xlib::XQueryPointer(
                 self.display.raw(),
-                motion_event.window,
-                xlib::RevertToPointerRoot,
-                xlib::CurrentTime,
+                self.layout.get_root(),
+                &mut root_return,
+                &mut child_return,
+                &mut root_x,
+                &mut root_y,
+                &mut win_x,
+                &mut win_y,
+                &mut mask_return,
             );
+
+            if child_return != 0 && child_return != self.layout.get_root() {
+                self.layout.focus_window(child_return);
+            }
         }
     }
 
@@ -325,5 +344,18 @@ impl WindowManager {
     fn handle_destroy_notify(&mut self, event: xlib::XEvent) {
         let destroy_event: xlib::XDestroyWindowEvent = From::from(event);
         self.layout.remove_window(destroy_event.window);
+    }
+
+    fn handle_enter_notify(&mut self, event: xlib::XEvent) {
+        let enter_event: xlib::XCrossingEvent = From::from(event);
+        if enter_event.window != 0 && enter_event.window != self.layout.get_root() {
+            self.layout.focus_window(enter_event.window);
+        }
+    }
+
+    fn handle_leave_notify(&mut self, _event: xlib::XEvent) {
+        // we don't need to do anything on leave, as entering a new window will handle focus. in the future we might want
+        // a config option to disable automatic focus changing, for now leave this empty. If automatic focus changing is
+        // disabled then allow clicking on windows to change focus.
     }
 }
