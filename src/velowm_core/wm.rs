@@ -690,6 +690,15 @@ impl WindowManager {
             );
 
             if child_return != 0 && child_return != self.layout.get_root() {
+                if let Some(workspace) = self.workspaces.get(self.current_workspace) {
+                    if let Some(window) = workspace.windows.iter().find(|w| w.id == child_return) {
+                        if window.is_dock {
+                            debug!("Ignoring close request for dock window");
+                            return;
+                        }
+                    }
+                }
+
                 let wm_protocols =
                     xlib::XInternAtom(self.display.raw(), c"WM_PROTOCOLS".as_ptr(), 0);
                 let wm_delete_window =
