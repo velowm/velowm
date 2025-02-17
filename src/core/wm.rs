@@ -12,9 +12,13 @@ use x11::xlib;
 
 use crate::{
     config::{command::Command, loader::Config},
-    ui::{cursor::Cursor, layout::MasterStackLayout, notification::NotificationWindow},
+    ui::{
+        bar::StatusBar, cursor::Cursor, layout::MasterStackLayout, notification::NotificationWindow,
+    },
     utils::x11::Display,
 };
+
+use super::{window::Window, workspace::Workspace};
 
 static SHOULD_RELOAD_CONFIG: AtomicBool = AtomicBool::new(false);
 
@@ -27,6 +31,9 @@ pub struct WindowManager {
     layout: MasterStackLayout,
     _watcher: RecommendedWatcher,
     notification: NotificationWindow,
+    workspaces: Vec<Workspace>,
+    current_workspace: usize,
+    status_bar: StatusBar,
 }
 
 impl WindowManager {
@@ -49,6 +56,18 @@ impl WindowManager {
                 notification.show_error(&format!("Failed to load config: {}", e));
             }
         }
+
+        let screen_width = unsafe {
+            xlib::XDisplayWidth(display.raw(), xlib::XDefaultScreen(display.raw())) as u32
+        };
+        let status_bar = unsafe {
+            StatusBar::new(
+                display.raw(),
+                root,
+                screen_width,
+                config.appearance.bar.clone(),
+            )
+        };
 
         let (tx, rx) = channel();
         let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
@@ -92,6 +111,11 @@ impl WindowManager {
             xlib::XSync(display.raw(), 0);
         }
 
+        let mut workspaces = Vec::with_capacity(10);
+        for i in 0..10 {
+            workspaces.push(Workspace::new(i));
+        }
+
         Ok(Self {
             display,
             running: true,
@@ -100,6 +124,9 @@ impl WindowManager {
             layout,
             _watcher: watcher,
             notification,
+            workspaces,
+            current_workspace: 0,
+            status_bar,
         })
     }
 
@@ -130,6 +157,19 @@ impl WindowManager {
 
         self.layout.update_config(new_config.clone());
 
+        unsafe {
+            let screen_width =
+                xlib::XDisplayWidth(self.display.raw(), xlib::XDefaultScreen(self.display.raw()))
+                    as u32;
+            self.status_bar = StatusBar::new(
+                self.display.raw(),
+                self.layout.get_root(),
+                screen_width,
+                new_config.appearance.bar.clone(),
+            );
+            self.status_bar.draw(self.current_workspace);
+        }
+
         self.config = new_config;
 
         unsafe {
@@ -156,6 +196,10 @@ impl WindowManager {
     }
 
     pub fn run(&mut self) -> Result<()> {
+        unsafe {
+            self.status_bar.draw(self.current_workspace);
+        }
+
         while self.running {
             if SHOULD_RELOAD_CONFIG.load(Ordering::SeqCst) {
                 if let Err(e) = self.reload_config() {
@@ -182,12 +226,27 @@ impl WindowManager {
                 xlib::UnmapNotify => self.handle_unmap_notify(event),
                 xlib::DestroyNotify => self.handle_destroy_notify(event),
                 xlib::MotionNotify => self.handle_motion_notify(event),
+                xlib::ButtonPress => {
+                    let button_event: xlib::XButtonEvent = From::from(event);
+                    if button_event.window == self.status_bar.window {
+                        if let Some(workspace) = self
+                            .status_bar
+                            .get_clicked_workspace(button_event.x, button_event.y)
+                        {
+                            self.switch_to_workspace(workspace);
+                        }
+                    }
+                }
                 xlib::EnterNotify => self.handle_enter_notify(event),
                 xlib::LeaveNotify => self.handle_leave_notify(event),
                 xlib::Expose => {
                     let expose_event: xlib::XExposeEvent = From::from(event);
                     if expose_event.window == self.notification.window {
                         // TODO: Store last error message and redraw it here
+                    } else if expose_event.window == self.status_bar.window {
+                        unsafe {
+                            self.status_bar.draw(self.current_workspace);
+                        }
                     }
                 }
                 _ => (),
@@ -252,6 +311,7 @@ impl WindowManager {
                         }
                     }
                     Command::Close => self.close_focused_window(),
+                    Command::Workspace(idx) => self.switch_to_workspace(*idx),
                 }
             }
         }
@@ -328,21 +388,51 @@ impl WindowManager {
 
     fn handle_map_request(&mut self, event: xlib::XEvent) {
         let map_event: xlib::XMapRequestEvent = From::from(event);
+        let window_id = map_event.window;
 
+        let mut attrs: xlib::XWindowAttributes = unsafe { std::mem::zeroed() };
         unsafe {
-            xlib::XMapWindow(self.display.raw(), map_event.window);
+            xlib::XGetWindowAttributes(self.display.raw(), window_id, &mut attrs);
+        }
 
-            self.layout.add_window(map_event.window);
+        let window = Window {
+            id: window_id,
+            x: attrs.x,
+            y: attrs.y,
+            width: attrs.width as u32,
+            height: attrs.height as u32,
+        };
+
+        if let Some(workspace) = self.workspaces.get_mut(self.current_workspace) {
+            workspace.add_window(window);
+            unsafe {
+                xlib::XMapWindow(self.display.raw(), window_id);
+                xlib::XSetWindowBorderWidth(
+                    self.display.raw(),
+                    window_id,
+                    self.config.appearance.border_width,
+                );
+            }
+            self.layout.add_window(window_id);
+            unsafe {
+                xlib::XSync(self.display.raw(), 0);
+            }
         }
     }
 
     fn handle_unmap_notify(&mut self, event: xlib::XEvent) {
         let unmap_event: xlib::XUnmapEvent = From::from(event);
+        if let Some(workspace) = self.workspaces.get_mut(self.current_workspace) {
+            workspace.remove_window(unmap_event.window);
+        }
         self.layout.remove_window(unmap_event.window);
     }
 
     fn handle_destroy_notify(&mut self, event: xlib::XEvent) {
         let destroy_event: xlib::XDestroyWindowEvent = From::from(event);
+        if let Some(workspace) = self.workspaces.get_mut(self.current_workspace) {
+            workspace.remove_window(destroy_event.window);
+        }
         self.layout.remove_window(destroy_event.window);
     }
 
@@ -357,5 +447,45 @@ impl WindowManager {
         // we don't need to do anything on leave, as entering a new window will handle focus. in the future we might want
         // a config option to disable automatic focus changing, for now leave this empty. If automatic focus changing is
         // disabled then allow clicking on windows to change focus.
+    }
+
+    fn switch_to_workspace(&mut self, index: usize) {
+        if index >= self.workspaces.len() || index == self.current_workspace {
+            return;
+        }
+
+        if let Some(current) = self.workspaces.get(self.current_workspace) {
+            for window in &current.windows {
+                unsafe {
+                    xlib::XUnmapWindow(self.display.raw(), window.id);
+                }
+            }
+        }
+
+        self.current_workspace = index;
+        self.layout.clear_windows();
+
+        if let Some(new) = self.workspaces.get(self.current_workspace) {
+            for window in &new.windows {
+                unsafe {
+                    xlib::XMapWindow(self.display.raw(), window.id);
+                    xlib::XSetWindowBorderWidth(
+                        self.display.raw(),
+                        window.id,
+                        self.config.appearance.border_width,
+                    );
+                }
+                self.layout.add_window(window.id);
+            }
+            if let Some(focused) = new.get_focused_window() {
+                self.layout.focus_window(focused.id);
+            }
+        }
+
+        self.layout.relayout();
+        unsafe {
+            self.status_bar.draw(self.current_workspace);
+            xlib::XSync(self.display.raw(), 0);
+        }
     }
 }

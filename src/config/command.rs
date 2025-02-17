@@ -7,6 +7,7 @@ pub enum Command {
     Exit,
     Close,
     Spawn(String),
+    Workspace(usize),
 }
 
 impl FromStr for Command {
@@ -17,6 +18,16 @@ impl FromStr for Command {
             "exit" => Ok(Command::Exit),
             "close" => Ok(Command::Close),
             s if s.starts_with("spawn ") => Ok(Command::Spawn(s[6..].to_string())),
+            s if s.starts_with("workspace") => {
+                let idx = s[9..]
+                    .trim()
+                    .parse::<usize>()
+                    .map_err(|_| format!("Invalid workspace index: {}", &s[9..]))?;
+                if idx == 0 || idx > 10 {
+                    return Err("Workspace index must be between 1 and 10".to_string());
+                }
+                Ok(Command::Workspace(idx - 1))
+            }
             _ => Err(format!("Unknown command: {}", s)),
         }
     }

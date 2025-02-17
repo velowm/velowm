@@ -18,6 +18,7 @@ pub mod input {
 
 pub mod ui {
     pub mod appearance;
+    pub mod bar;
     pub mod cursor;
     pub mod layout;
     pub mod notification;

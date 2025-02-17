@@ -39,6 +39,16 @@ pub fn get_keysym_for_key(key: &str) -> u64 {
         "x" => keysym::XK_x,
         "y" => keysym::XK_y,
         "z" => keysym::XK_z,
+        "0" => keysym::XK_0,
+        "1" => keysym::XK_1,
+        "2" => keysym::XK_2,
+        "3" => keysym::XK_3,
+        "4" => keysym::XK_4,
+        "5" => keysym::XK_5,
+        "6" => keysym::XK_6,
+        "7" => keysym::XK_7,
+        "8" => keysym::XK_8,
+        "9" => keysym::XK_9,
         _ => keysym::XK_w,
     }
     .into()

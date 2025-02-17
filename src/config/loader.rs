@@ -88,11 +88,23 @@ focused_border_color = "#A7C080"
 # Gap between windows in pixels
 gaps = 8
 
+# Status bar settings
+[appearance.bar]
+# Enable or disable the status bar
+enabled = true
+# Bar background color
+background_color = "#0F0F0F"
+# Bar text color
+text_color = "#ABB2BF"
+# Active workspace highlight color
+highlight_color = "#3E4451"
+
 # Keybindings
 # Format: bind = key,command
 # Commands:
 #   - exit: Exit the window manager
 #   - close: Close focused window
+#   - workspace<N>: Switch to workspace N (1-10)
 #   - Any other string will be executed as a command
 [[binds]]
 key = "w"
@@ -104,7 +116,48 @@ command = "spawn alacritty"
 
 [[binds]]
 key = "c"
-command = "close""###;
+command = "close"
+
+# Workspace bindings
+[[binds]]
+key = "1"
+command = "workspace1"
+
+[[binds]]
+key = "2"
+command = "workspace2"
+
+[[binds]]
+key = "3"
+command = "workspace3"
+
+[[binds]]
+key = "4"
+command = "workspace4"
+
+[[binds]]
+key = "5"
+command = "workspace5"
+
+[[binds]]
+key = "6"
+command = "workspace6"
+
+[[binds]]
+key = "7"
+command = "workspace7"
+
+[[binds]]
+key = "8"
+command = "workspace8"
+
+[[binds]]
+key = "9"
+command = "workspace9"
+
+[[binds]]
+key = "0"
+command = "workspace10""###;
 
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).context("Failed to create config directory")?;

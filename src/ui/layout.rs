@@ -132,6 +132,11 @@ impl MasterStackLayout {
         self.focus_window(window);
     }
 
+    pub fn clear_windows(&mut self) {
+        self.windows.clear();
+        self.focused_window = None;
+    }
+
     pub fn remove_window(&mut self, window: xlib::Window) {
         if self.focused_window == Some(window) {
             self.focused_window = None;
@@ -180,6 +185,11 @@ impl MasterStackLayout {
 
         let border_offset = self.config.appearance.border_width * 2;
         let gaps = self.config.appearance.gaps;
+        let bar_height = if self.config.appearance.bar.enabled {
+            20
+        } else {
+            0
+        };
 
         match self.windows.len() {
             0 => (),
@@ -187,24 +197,25 @@ impl MasterStackLayout {
                 self.apply_window_geometry(
                     0,
                     self.current_monitor.x as u32 + gaps,
-                    self.current_monitor.y as u32 + gaps,
+                    self.current_monitor.y as u32 + gaps + bar_height,
                     screen_width - border_offset - (gaps * 2),
-                    screen_height - border_offset - (gaps * 2),
+                    screen_height - border_offset - (gaps * 2) - bar_height,
                 );
             }
             n => {
                 self.apply_window_geometry(
                     0,
                     self.current_monitor.x as u32 + gaps,
-                    self.current_monitor.y as u32 + gaps,
+                    self.current_monitor.y as u32 + gaps + bar_height,
                     master_width - border_offset - gaps - (gaps / 2),
-                    screen_height - border_offset - (gaps * 2),
+                    screen_height - border_offset - (gaps * 2) - bar_height,
                 );
 
                 let stack_count = n - 1;
-                let height_per_window = ((screen_height - (gaps * (stack_count + 1) as u32))
-                    / stack_count as u32)
-                    .saturating_sub(border_offset);
+                let height_per_window =
+                    ((screen_height - bar_height - (gaps * (stack_count + 1) as u32))
+                        / stack_count as u32)
+                        .saturating_sub(border_offset);
 
                 for i in 1..n {
                     let stack_index = i - 1;
@@ -213,6 +224,7 @@ impl MasterStackLayout {
                         self.current_monitor.x as u32 + master_width + (gaps / 2),
                         self.current_monitor.y as u32
                             + gaps
+                            + bar_height
                             + stack_index as u32 * (height_per_window + border_offset + gaps),
                         stack_width - border_offset - gaps - (gaps / 2),
                         height_per_window,
