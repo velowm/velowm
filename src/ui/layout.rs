@@ -152,8 +152,14 @@ impl MasterStackLayout {
     pub fn remove_window(&mut self, window: xlib::Window) {
         if self.focused_window == Some(window) {
             self.focused_window = None;
-            if let Some(last_window) = self.windows.iter().find(|w| w.id != window) {
-                self.focus_window(last_window.id);
+            if let Some(idx) = self.windows.iter().position(|w| w.id == window) {
+                if idx > 0 {
+                    if let Some(prev_window) = self.windows.get(idx - 1) {
+                        self.focus_window(prev_window.id);
+                    }
+                } else if let Some(next_window) = self.windows.get(1) {
+                    self.focus_window(next_window.id);
+                }
             }
         }
         self.windows.retain(|w| w.id != window);
