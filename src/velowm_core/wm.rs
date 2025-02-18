@@ -882,19 +882,26 @@ impl WindowManager {
 
                 self.layout.update_dock_space(window.y, window.height);
             } else if let Some(workspace) = self.workspaces.get_mut(self.current_workspace) {
-                workspace.add_window(window);
                 xlib::XMapWindow(self.display.raw(), window_id);
                 xlib::XSetWindowBorderWidth(
                     self.display.raw(),
                     window_id,
                     self.config.appearance.border_width,
                 );
-                xlib::XSetWindowBorder(
-                    self.display.raw(),
-                    window_id,
-                    self.config.get_border_color(),
-                );
+
+                workspace.add_window(window);
                 self.layout.add_window(window_id);
+
+                for window in &workspace.windows {
+                    let border_color = if window.id == window_id {
+                        self.config.get_focused_border_color()
+                    } else {
+                        self.config.get_border_color()
+                    };
+                    xlib::XSetWindowBorder(self.display.raw(), window.id, border_color);
+                }
+
+                self.set_active_window(window_id);
                 xlib::XSync(self.display.raw(), 0);
             }
         }
@@ -912,6 +919,11 @@ impl WindowManager {
             workspace.remove_window(unmap_event.window);
         }
         self.layout.remove_window(unmap_event.window);
+        self.raise_floating_windows();
+        unsafe {
+            self.notification_manager.raise_all();
+            xlib::XSync(self.display.raw(), 0);
+        }
     }
 
     fn handle_destroy_notify(&mut self, event: xlib::XEvent) {
@@ -920,6 +932,11 @@ impl WindowManager {
             workspace.remove_window(destroy_event.window);
         }
         self.layout.remove_window(destroy_event.window);
+        self.raise_floating_windows();
+        unsafe {
+            self.notification_manager.raise_all();
+            xlib::XSync(self.display.raw(), 0);
+        }
     }
 
     fn handle_enter_notify(&mut self, event: xlib::XEvent) {
