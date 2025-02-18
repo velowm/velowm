@@ -1,6 +1,22 @@
 use serde::Deserialize;
 
 #[derive(Deserialize, Default, Clone)]
+pub struct NotificationAppearance {
+    #[serde(default = "default_notification_background_color")]
+    pub background_color: String,
+    #[serde(default = "default_notification_border_color")]
+    pub border_color: String,
+}
+
+fn default_notification_background_color() -> String {
+    String::from("#0F0F0F")
+}
+
+fn default_notification_border_color() -> String {
+    String::from("#FF0000")
+}
+
+#[derive(Deserialize, Default, Clone)]
 pub struct FloatingWindow {
     #[serde(default)]
     pub center_on_float: bool,
@@ -24,6 +40,8 @@ pub struct Appearance {
     pub floating: FloatingWindow,
     #[serde(default = "default_focus_follows_mouse")]
     pub focus_follows_mouse: bool,
+    #[serde(default)]
+    pub notification: NotificationAppearance,
 }
 
 fn default_border_width() -> u32 {
@@ -57,5 +75,15 @@ impl Appearance {
     pub fn get_focused_border_color(&self) -> u64 {
         let color = self.focused_border_color.trim_start_matches('#');
         u64::from_str_radix(color, 16).unwrap_or(0xA7C080)
+    }
+
+    pub fn get_notification_background_color(&self) -> u64 {
+        let color = self.notification.background_color.trim_start_matches('#');
+        u64::from_str_radix(color, 16).unwrap_or(0x0F0F0F)
+    }
+
+    pub fn get_notification_border_color(&self) -> u64 {
+        let color = self.notification.border_color.trim_start_matches('#');
+        u64::from_str_radix(color, 16).unwrap_or(0xFF0000)
     }
 }

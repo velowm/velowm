@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::{fs, path::PathBuf};
 
 use crate::{
-    ui::appearance::{Appearance, FloatingWindow},
+    ui::appearance::{Appearance, FloatingWindow, NotificationAppearance},
     utils::{
         command::Command,
         keybind::{self, Bind},
@@ -113,6 +113,10 @@ impl Default for Config {
                     height: 600,
                 },
                 focus_follows_mouse: true,
+                notification: NotificationAppearance {
+                    background_color: "#0F0F0F".to_string(),
+                    border_color: "#FF0000".to_string(),
+                },
             },
             logging_enabled: true,
             auto_generated: true,
@@ -185,6 +189,13 @@ focused_border_color = "#FF0000"
 gaps = 8
 # Whether focus follows mouse movement
 focus_follows_mouse = true
+
+# Notification appearance
+[appearance.notification]
+# Background color for notification windows
+background_color = "#0F0F0F"
+# Border color for notification windows
+border_color = "#FF0000"
 
 # Floating window settings
 [appearance.floating]

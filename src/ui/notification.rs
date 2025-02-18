@@ -85,14 +85,16 @@ impl NotificationWindow {
     pub unsafe fn new(display: *mut xlib::Display, root: xlib::Window, width: i32) -> Self {
         let screen = xlib::XDefaultScreen(display);
         let white = xlib::XWhitePixel(display, screen);
-        let red = 0xFF0000;
-        let dark_gray = 0x0F0F0F;
 
         let line_height = 20i32;
         let padding = 10i32;
         let initial_height = line_height + padding * 2;
         let x = (xlib::XDisplayWidth(display, screen) - width) / 2;
         let y = 50;
+
+        let config = crate::config::loader::Config::load().unwrap_or_default();
+        let background_color = config.appearance.get_notification_background_color();
+        let border_color = config.appearance.get_notification_border_color();
 
         let window = xlib::XCreateSimpleWindow(
             display,
@@ -102,8 +104,8 @@ impl NotificationWindow {
             width as u32,
             initial_height as u32,
             2,
-            red,
-            dark_gray,
+            border_color,
+            background_color,
         );
 
         let mut attrs: xlib::XSetWindowAttributes = std::mem::zeroed();
