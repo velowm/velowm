@@ -809,18 +809,20 @@ impl WindowManager {
                     0,
                 );
 
-                xlib::XGrabButton(
-                    self.display.raw(),
-                    xlib::AnyButton as u32,
-                    0,
-                    window_id,
-                    1,
-                    (xlib::ButtonPressMask | xlib::ButtonReleaseMask) as u32,
-                    xlib::GrabModeAsync,
-                    xlib::GrabModeAsync,
-                    0,
-                    0,
-                );
+                if !self.config.appearance.focus_follows_mouse {
+                    xlib::XGrabButton(
+                        self.display.raw(),
+                        xlib::AnyButton as u32,
+                        0,
+                        window_id,
+                        1,
+                        (xlib::ButtonPressMask | xlib::ButtonReleaseMask) as u32,
+                        xlib::GrabModeSync,
+                        xlib::GrabModeAsync,
+                        0,
+                        0,
+                    );
+                }
             }
             is_dock
         };
@@ -989,6 +991,35 @@ impl WindowManager {
                             0,
                             0,
                         );
+                        xlib::XGrabButton(
+                            self.display.raw(),
+                            3,
+                            self.config.get_modifier(),
+                            window.id,
+                            1,
+                            (xlib::ButtonPressMask
+                                | xlib::ButtonReleaseMask
+                                | xlib::PointerMotionMask) as u32,
+                            xlib::GrabModeAsync,
+                            xlib::GrabModeAsync,
+                            0,
+                            0,
+                        );
+
+                        if !self.config.appearance.focus_follows_mouse {
+                            xlib::XGrabButton(
+                                self.display.raw(),
+                                xlib::AnyButton as u32,
+                                0,
+                                window.id,
+                                1,
+                                (xlib::ButtonPressMask | xlib::ButtonReleaseMask) as u32,
+                                xlib::GrabModeSync,
+                                xlib::GrabModeAsync,
+                                0,
+                                0,
+                            );
+                        }
 
                         if window.is_floating {
                             xlib::XMoveResizeWindow(
@@ -1235,6 +1266,11 @@ impl WindowManager {
                 unsafe {
                     self.notification_manager.raise_all();
                 }
+            }
+
+            unsafe {
+                xlib::XAllowEvents(self.display.raw(), xlib::ReplayPointer, 0);
+                xlib::XSync(self.display.raw(), 0);
             }
         }
     }
