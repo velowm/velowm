@@ -25,6 +25,12 @@ pub struct NotificationManager {
 }
 
 impl NotificationManager {
+    /// Creates a new notification manager.
+    ///
+    /// # Safety
+    ///
+    /// The display pointer must be valid and point to an active X display connection.
+    /// The root window must be a valid window ID for the given display.
     pub unsafe fn new(display: *mut xlib::Display, root: xlib::Window) -> Self {
         Self {
             display,
@@ -36,6 +42,11 @@ impl NotificationManager {
         }
     }
 
+    /// Shows an error notification with the given message.
+    ///
+    /// # Safety
+    ///
+    /// The display pointer stored in self must still be valid and point to an active X display connection.
     pub unsafe fn show_error(&mut self, message: &str) {
         let mut notification = NotificationWindow::new(self.display, self.root, self.width);
         notification.show_error(message);
@@ -43,6 +54,12 @@ impl NotificationManager {
         self.relayout();
     }
 
+    /// Handles button press events for notification windows.
+    ///
+    /// # Safety
+    ///
+    /// The display pointer stored in self must still be valid and point to an active X display connection.
+    /// The window ID must be valid for the given display.
     pub unsafe fn handle_button_press(&mut self, window: xlib::Window) {
         if let Some(index) = self.notifications.iter().position(|n| n.window == window) {
             self.notifications.remove(index);
@@ -50,12 +67,23 @@ impl NotificationManager {
         }
     }
 
+    /// Handles expose events for notification windows.
+    ///
+    /// # Safety
+    ///
+    /// The display pointer stored in self must still be valid and point to an active X display connection.
+    /// The window ID must be valid for the given display.
     pub unsafe fn handle_expose(&self, window: xlib::Window) {
         if let Some(notification) = self.notifications.iter().find(|n| n.window == window) {
             notification.redraw();
         }
     }
 
+    /// Raises all notification windows to the top of the window stack.
+    ///
+    /// # Safety
+    ///
+    /// The display pointer stored in self must still be valid and point to an active X display connection.
     pub unsafe fn raise_all(&self) {
         for notification in &self.notifications {
             xlib::XRaiseWindow(self.display, notification.window);
@@ -120,13 +148,10 @@ impl NotificationWindow {
             &mut attrs,
         );
 
-        let net_wm_window_type =
-            xlib::XInternAtom(display, b"_NET_WM_WINDOW_TYPE\0".as_ptr() as *const i8, 0);
-        let net_wm_window_type_dock = xlib::XInternAtom(
-            display,
-            b"_NET_WM_WINDOW_TYPE_DOCK\0".as_ptr() as *const i8,
-            0,
-        );
+        let net_wm_window_type = xlib::XInternAtom(display, c"_NET_WM_WINDOW_TYPE".as_ptr(), 0);
+        let net_wm_window_type_dock =
+            xlib::XInternAtom(display, c"_NET_WM_WINDOW_TYPE_DOCK".as_ptr(), 0);
+
         xlib::XChangeProperty(
             display,
             window,
@@ -138,9 +163,9 @@ impl NotificationWindow {
             1,
         );
 
-        let net_wm_state = xlib::XInternAtom(display, b"_NET_WM_STATE\0".as_ptr() as *const i8, 0);
-        let net_wm_state_above =
-            xlib::XInternAtom(display, b"_NET_WM_STATE_ABOVE\0".as_ptr() as *const i8, 0);
+        let net_wm_state = xlib::XInternAtom(display, c"_NET_WM_STATE".as_ptr(), 0);
+        let net_wm_state_above = xlib::XInternAtom(display, c"_NET_WM_STATE_ABOVE".as_ptr(), 0);
+
         xlib::XChangeProperty(
             display,
             window,

@@ -14,7 +14,7 @@ fn main() -> Result<()> {
     }
 
     if env::var("WAYLAND_DISPLAY").is_ok()
-        || env::var("XDG_SESSION_TYPE").map_or(false, |v| v == "wayland")
+        || env::var("XDG_SESSION_TYPE").is_ok_and(|v| v == "wayland")
     {
         error!("Wayland session detected. velowm is an X11 window manager and cannot run under Wayland.");
         process::exit(1);

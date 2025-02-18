@@ -72,28 +72,15 @@ impl WindowManager {
         }
 
         let (net_active_window, net_current_desktop) = unsafe {
-            let net_active_window = xlib::XInternAtom(
-                display.raw(),
-                b"_NET_ACTIVE_WINDOW\0".as_ptr() as *const i8,
-                0,
-            );
-            let net_current_desktop = xlib::XInternAtom(
-                display.raw(),
-                b"_NET_CURRENT_DESKTOP\0".as_ptr() as *const i8,
-                0,
-            );
-            let net_number_of_desktops = xlib::XInternAtom(
-                display.raw(),
-                b"_NET_NUMBER_OF_DESKTOPS\0".as_ptr() as *const i8,
-                0,
-            );
-            let net_desktop_names = xlib::XInternAtom(
-                display.raw(),
-                b"_NET_DESKTOP_NAMES\0".as_ptr() as *const i8,
-                0,
-            );
-            let net_supported =
-                xlib::XInternAtom(display.raw(), b"_NET_SUPPORTED\0".as_ptr() as *const i8, 0);
+            let net_active_window =
+                xlib::XInternAtom(display.raw(), c"_NET_ACTIVE_WINDOW".as_ptr(), 0);
+            let net_current_desktop =
+                xlib::XInternAtom(display.raw(), c"_NET_CURRENT_DESKTOP".as_ptr(), 0);
+            let net_number_of_desktops =
+                xlib::XInternAtom(display.raw(), c"_NET_NUMBER_OF_DESKTOPS".as_ptr(), 0);
+            let net_desktop_names =
+                xlib::XInternAtom(display.raw(), c"_NET_DESKTOP_NAMES".as_ptr(), 0);
+            let net_supported = xlib::XInternAtom(display.raw(), c"_NET_SUPPORTED".as_ptr(), 0);
 
             let supported_atoms = [
                 net_active_window,
@@ -145,7 +132,7 @@ impl WindowManager {
                 display.raw(),
                 root,
                 net_desktop_names,
-                xlib::XInternAtom(display.raw(), b"UTF8_STRING\0".as_ptr() as *const i8, 0),
+                xlib::XInternAtom(display.raw(), c"UTF8_STRING".as_ptr(), 0),
                 8,
                 xlib::PropModeReplace,
                 names_str.as_bytes().as_ptr(),
@@ -401,29 +388,54 @@ impl WindowManager {
 
     fn toggle_float(&mut self) {
         unsafe {
-            let mut root_return: xlib::Window = 0;
-            let mut child_return: xlib::Window = 0;
-            let mut root_x: i32 = 0;
-            let mut root_y: i32 = 0;
-            let mut win_x: i32 = 0;
-            let mut win_y: i32 = 0;
-            let mut mask_return: u32 = 0;
+            let mut focused_win: xlib::Window = 0;
+            let mut revert_to: i32 = 0;
+            xlib::XGetInputFocus(self.display.raw(), &mut focused_win, &mut revert_to);
 
-            xlib::XQueryPointer(
+            let mut actual_type: xlib::Atom = 0;
+            let mut actual_format: i32 = 0;
+            let mut nitems: u64 = 0;
+            let mut bytes_after: u64 = 0;
+            let mut data: *mut xlib::Window = std::ptr::null_mut();
+
+            let root = xlib::XDefaultRootWindow(self.display.raw());
+            xlib::XGetWindowProperty(
                 self.display.raw(),
-                self.layout.get_root(),
-                &mut root_return,
-                &mut child_return,
-                &mut root_x,
-                &mut root_y,
-                &mut win_x,
-                &mut win_y,
-                &mut mask_return,
+                root,
+                self.net_active_window,
+                0,
+                1,
+                0,
+                xlib::XA_WINDOW,
+                &mut actual_type,
+                &mut actual_format,
+                &mut nitems,
+                &mut bytes_after,
+                &mut data as *mut *mut xlib::Window as *mut *mut u8,
             );
 
-            if child_return != 0 && child_return != self.layout.get_root() {
-                if let Some(workspace) = self.workspaces.get_mut(self.current_workspace) {
-                    let window_id = child_return;
+            let net_active_win = if !data.is_null() && nitems > 0 {
+                let win = *data;
+                xlib::XFree(data as *mut _);
+                win
+            } else {
+                0
+            };
+
+            let window_id = if focused_win != 0 && focused_win != self.layout.get_root() {
+                focused_win
+            } else if net_active_win != 0 && net_active_win != self.layout.get_root() {
+                net_active_win
+            } else if let Some(workspace) = self.workspaces.get(self.current_workspace) {
+                workspace.get_focused_window().map(|w| w.id).unwrap_or(0)
+            } else {
+                0
+            };
+
+            if window_id != 0 {
+                let (is_floating, should_update) = if let Some(workspace) =
+                    self.workspaces.get_mut(self.current_workspace)
+                {
                     let is_floating = workspace
                         .windows
                         .iter()
@@ -440,18 +452,8 @@ impl WindowManager {
                             window.y = window.pre_float_y;
                             window.width = window.pre_float_width;
                             window.height = window.pre_float_height;
-                            self.layout.add_window(window.id);
-                            self.layout.relayout();
                         }
-
-                        for window in &workspace.windows {
-                            let border_color = if window.id == window_id {
-                                self.config.get_focused_border_color()
-                            } else {
-                                self.config.get_border_color()
-                            };
-                            xlib::XSetWindowBorder(self.display.raw(), window.id, border_color);
-                        }
+                        (false, true)
                     } else {
                         if let Some(window) =
                             workspace.windows.iter_mut().find(|w| w.id == window_id)
@@ -495,6 +497,27 @@ impl WindowManager {
                                 if !monitors.is_null() && num_monitors > 0 {
                                     let monitors_slice =
                                         std::slice::from_raw_parts(monitors, num_monitors as usize);
+
+                                    let mut root_return: xlib::Window = 0;
+                                    let mut child_return: xlib::Window = 0;
+                                    let mut root_x: i32 = 0;
+                                    let mut root_y: i32 = 0;
+                                    let mut win_x: i32 = 0;
+                                    let mut win_y: i32 = 0;
+                                    let mut mask_return: u32 = 0;
+
+                                    xlib::XQueryPointer(
+                                        self.display.raw(),
+                                        self.layout.get_root(),
+                                        &mut root_return,
+                                        &mut child_return,
+                                        &mut root_x,
+                                        &mut root_y,
+                                        &mut win_x,
+                                        &mut win_y,
+                                        &mut mask_return,
+                                    );
+
                                     let current_monitor = monitors_slice
                                         .iter()
                                         .find(|monitor| {
@@ -554,11 +577,31 @@ impl WindowManager {
                                     window.height,
                                 );
                             }
-
-                            self.layout.remove_window(window.id);
-                            self.layout.relayout();
                         }
+                        (true, true)
+                    }
+                } else {
+                    (false, false)
+                };
 
+                if should_update {
+                    if !is_floating {
+                        self.layout.add_window(window_id);
+                        self.layout.relayout();
+                    } else {
+                        self.layout.remove_window(window_id);
+                        self.layout.relayout();
+                    }
+
+                    xlib::XSetInputFocus(
+                        self.display.raw(),
+                        window_id,
+                        xlib::RevertToPointerRoot,
+                        xlib::CurrentTime,
+                    );
+                    self.set_active_window(window_id);
+
+                    if let Some(workspace) = self.workspaces.get(self.current_workspace) {
                         for window in &workspace.windows {
                             let border_color = if window.id == window_id {
                                 self.config.get_focused_border_color()
@@ -567,9 +610,15 @@ impl WindowManager {
                             };
                             xlib::XSetWindowBorder(self.display.raw(), window.id, border_color);
                         }
+                    }
 
+                    if is_floating {
                         xlib::XRaiseWindow(self.display.raw(), window_id);
                     }
+
+                    self.raise_floating_windows();
+                    self.notification_manager.raise_all();
+                    xlib::XSync(self.display.raw(), 0);
                 }
             }
         }
@@ -685,60 +734,172 @@ impl WindowManager {
     fn close_focused_window(&mut self) {
         debug!("Attempting to close focused window");
         unsafe {
-            if let Some(focused_window) = self.layout.get_focused_window() {
-                if let Some(workspace) = self.workspaces.get(self.current_workspace) {
-                    if let Some(window) = workspace.windows.iter().find(|w| w.id == focused_window)
-                    {
-                        if window.is_dock {
-                            debug!("Ignoring close request for dock window");
-                            return;
+            let (focused_window, _was_floating, next_window) = {
+                let workspace = self.workspaces.get(self.current_workspace);
+
+                let mut focused_win: xlib::Window = 0;
+                let mut revert_to: i32 = 0;
+                xlib::XGetInputFocus(self.display.raw(), &mut focused_win, &mut revert_to);
+
+                let mut actual_type: xlib::Atom = 0;
+                let mut actual_format: i32 = 0;
+                let mut nitems: u64 = 0;
+                let mut bytes_after: u64 = 0;
+                let mut data: *mut xlib::Window = std::ptr::null_mut();
+
+                let root = xlib::XDefaultRootWindow(self.display.raw());
+                xlib::XGetWindowProperty(
+                    self.display.raw(),
+                    root,
+                    self.net_active_window,
+                    0,
+                    1,
+                    0,
+                    xlib::XA_WINDOW,
+                    &mut actual_type,
+                    &mut actual_format,
+                    &mut nitems,
+                    &mut bytes_after,
+                    &mut data as *mut *mut xlib::Window as *mut *mut u8,
+                );
+
+                let net_active_win = if !data.is_null() && nitems > 0 {
+                    let win = *data;
+                    xlib::XFree(data as *mut _);
+                    win
+                } else {
+                    0
+                };
+
+                let (focused_id, is_floating) =
+                    if focused_win != 0 && focused_win != self.layout.get_root() {
+                        workspace.and_then(|ws| {
+                            ws.windows
+                                .iter()
+                                .find(|w| w.id == focused_win)
+                                .map(|w| (w.id, w.is_floating))
+                        })
+                    } else if net_active_win != 0 && net_active_win != self.layout.get_root() {
+                        workspace.and_then(|ws| {
+                            ws.windows
+                                .iter()
+                                .find(|w| w.id == net_active_win)
+                                .map(|w| (w.id, w.is_floating))
+                        })
+                    } else {
+                        None
+                    }
+                    .unwrap_or_else(|| {
+                        workspace
+                            .and_then(|ws| ws.get_focused_window().map(|w| (w.id, w.is_floating)))
+                            .or_else(|| self.layout.get_focused_window().map(|id| (id, false)))
+                            .unwrap_or((0, false))
+                    });
+
+                let next = if focused_id != 0 {
+                    workspace.and_then(|ws| {
+                        if is_floating {
+                            let next_floating = ws
+                                .windows
+                                .iter()
+                                .filter(|w| w.is_floating && !w.is_dock && w.id != focused_id)
+                                .last();
+
+                            next_floating
+                                .or_else(|| {
+                                    ws.windows
+                                        .iter()
+                                        .filter(|w| !w.is_floating && !w.is_dock)
+                                        .last()
+                                })
+                                .map(|w| (w.id, w.is_floating))
+                        } else {
+                            ws.windows
+                                .iter()
+                                .filter(|w| !w.is_dock)
+                                .last()
+                                .map(|w| (w.id, w.is_floating))
                         }
+                    })
+                } else {
+                    None
+                };
+
+                (focused_id, is_floating, next)
+            };
+
+            if focused_window == 0 {
+                return;
+            }
+
+            if let Some(workspace) = self.workspaces.get(self.current_workspace) {
+                if let Some(window) = workspace.windows.iter().find(|w| w.id == focused_window) {
+                    if window.is_dock {
+                        debug!("Ignoring close request for dock window");
+                        return;
                     }
                 }
+            }
 
-                let wm_protocols =
-                    xlib::XInternAtom(self.display.raw(), c"WM_PROTOCOLS".as_ptr(), 0);
-                let wm_delete_window =
-                    xlib::XInternAtom(self.display.raw(), c"WM_DELETE_WINDOW".as_ptr(), 0);
+            let wm_protocols = xlib::XInternAtom(self.display.raw(), c"WM_PROTOCOLS".as_ptr(), 0);
+            let wm_delete_window =
+                xlib::XInternAtom(self.display.raw(), c"WM_DELETE_WINDOW".as_ptr(), 0);
 
-                let mut protocols: *mut xlib::Atom = std::ptr::null_mut();
-                let mut num_protocols: i32 = 0;
+            let mut protocols: *mut xlib::Atom = std::ptr::null_mut();
+            let mut num_protocols: i32 = 0;
 
-                if xlib::XGetWMProtocols(
-                    self.display.raw(),
-                    focused_window,
-                    &mut protocols,
-                    &mut num_protocols,
-                ) != 0
-                {
-                    let protocols_slice =
-                        std::slice::from_raw_parts(protocols, num_protocols as usize);
-                    if protocols_slice.contains(&wm_delete_window) {
-                        let mut data: xlib::ClientMessageData = std::mem::zeroed();
-                        data.set_long(0, wm_delete_window as i64);
+            if xlib::XGetWMProtocols(
+                self.display.raw(),
+                focused_window,
+                &mut protocols,
+                &mut num_protocols,
+            ) != 0
+            {
+                let protocols_slice = std::slice::from_raw_parts(protocols, num_protocols as usize);
+                if protocols_slice.contains(&wm_delete_window) {
+                    let mut data: xlib::ClientMessageData = std::mem::zeroed();
+                    data.set_long(0, wm_delete_window as i64);
 
-                        let mut event = xlib::XEvent {
-                            client_message: xlib::XClientMessageEvent {
-                                type_: xlib::ClientMessage,
-                                serial: 0,
-                                send_event: 1,
-                                display: self.display.raw(),
-                                window: focused_window,
-                                message_type: wm_protocols,
-                                format: 32,
-                                data,
-                            },
-                        };
-                        xlib::XSendEvent(self.display.raw(), focused_window, 0, 0, &mut event);
-                    } else {
-                        xlib::XDestroyWindow(self.display.raw(), focused_window);
-                    }
-                    xlib::XFree(protocols as *mut _);
+                    let mut event = xlib::XEvent {
+                        client_message: xlib::XClientMessageEvent {
+                            type_: xlib::ClientMessage,
+                            serial: 0,
+                            send_event: 1,
+                            display: self.display.raw(),
+                            window: focused_window,
+                            message_type: wm_protocols,
+                            format: 32,
+                            data,
+                        },
+                    };
+                    xlib::XSendEvent(self.display.raw(), focused_window, 0, 0, &mut event);
                 } else {
                     xlib::XDestroyWindow(self.display.raw(), focused_window);
                 }
+                xlib::XFree(protocols as *mut _);
+            } else {
+                xlib::XDestroyWindow(self.display.raw(), focused_window);
+            }
 
-                xlib::XSync(self.display.raw(), 0);
+            xlib::XSync(self.display.raw(), 0);
+
+            if let Some((next_id, is_floating)) = next_window {
+                if is_floating {
+                    xlib::XRaiseWindow(self.display.raw(), next_id);
+                }
+                self.layout.focus_window(next_id);
+                self.set_active_window(next_id);
+
+                if let Some(workspace) = self.workspaces.get(self.current_workspace) {
+                    for w in &workspace.windows {
+                        let border_color = if w.id == next_id {
+                            self.config.get_focused_border_color()
+                        } else {
+                            self.config.get_border_color()
+                        };
+                        xlib::XSetWindowBorder(self.display.raw(), w.id, border_color);
+                    }
+                }
             }
         }
     }
@@ -752,16 +913,10 @@ impl WindowManager {
         let is_dock = unsafe {
             xlib::XGetWindowAttributes(self.display.raw(), window_id, &mut attrs);
 
-            let net_wm_window_type = xlib::XInternAtom(
-                self.display.raw(),
-                b"_NET_WM_WINDOW_TYPE\0".as_ptr() as *const i8,
-                0,
-            );
-            let net_wm_window_type_dock = xlib::XInternAtom(
-                self.display.raw(),
-                b"_NET_WM_WINDOW_TYPE_DOCK\0".as_ptr() as *const i8,
-                0,
-            );
+            let net_wm_window_type =
+                xlib::XInternAtom(self.display.raw(), c"_NET_WM_WINDOW_TYPE".as_ptr(), 0);
+            let net_wm_window_type_dock =
+                xlib::XInternAtom(self.display.raw(), c"_NET_WM_WINDOW_TYPE_DOCK".as_ptr(), 0);
 
             let mut actual_type: xlib::Atom = 0;
             let mut actual_format: i32 = 0;
