@@ -1,11 +1,11 @@
 use anyhow::Result;
 use log::{debug, error, info, warn};
-use std::{cell::RefCell, process::Command as ProcessCommand};
+use std::process::Command as ProcessCommand;
 use x11::{xinerama, xlib};
 
 use crate::{
     config::loader::Config,
-    ui::{cursor::Cursor, layout::MasterStackLayout, notification::NotificationWindow},
+    ui::{cursor::Cursor, layout::MasterStackLayout, notification::NotificationManager},
     utils::{command::Command, x11::Display},
 };
 
@@ -18,7 +18,7 @@ pub struct WindowManager {
     cursor: Cursor,
     config: Config,
     layout: MasterStackLayout,
-    notification: RefCell<NotificationWindow>,
+    notification_manager: NotificationManager,
     workspaces: Vec<Workspace>,
     current_workspace: usize,
     dragging: bool,
@@ -47,20 +47,20 @@ impl WindowManager {
         });
 
         let layout = unsafe { MasterStackLayout::new(display.raw(), root, config.clone()) };
-        let mut notification = unsafe { NotificationWindow::new(display.raw(), root) };
+        let mut notification_manager = unsafe { NotificationManager::new(display.raw(), root) };
 
         if let Err(e) = Config::load() {
             error!("Failed to load config: {}", e);
             if config.notifications_enabled {
                 unsafe {
-                    notification.show_error(&format!("Failed to load config: {}", e));
+                    notification_manager.show_error(&format!("Failed to load config: {}", e));
                 }
             }
         }
 
         if config.auto_generated && config.notifications_enabled {
             unsafe {
-                notification.show_error(
+                notification_manager.show_error(
                     "You are using an auto generated config\n\
                     \n\
                     Press Alt+Q to open alacritty\n\
@@ -182,7 +182,7 @@ impl WindowManager {
             cursor,
             config,
             layout,
-            notification: RefCell::new(notification),
+            notification_manager,
             workspaces,
             current_workspace: 0,
             dragging: false,
@@ -230,21 +230,7 @@ impl WindowManager {
                 xlib::MotionNotify => self.handle_motion_notify(event),
                 xlib::ButtonPress => {
                     let button_event: xlib::XButtonEvent = From::from(event);
-                    debug!(
-                        "Button press: window={}, button={}, state={}",
-                        button_event.window, button_event.button, button_event.state
-                    );
-                    if button_event.window == self.notification.borrow().window {
-                        unsafe {
-                            self.notification.borrow_mut().handle_button_press();
-                        }
-                    } else if button_event.state & self.config.get_modifier() != 0 {
-                        match button_event.button {
-                            1 => self.start_window_drag(button_event),
-                            3 => self.start_window_resize(button_event),
-                            _ => (),
-                        }
-                    }
+                    self.handle_button_press(button_event);
                 }
                 xlib::ButtonRelease => {
                     if self.dragging {
@@ -257,11 +243,7 @@ impl WindowManager {
                 xlib::LeaveNotify => self.handle_leave_notify(event),
                 xlib::Expose => {
                     let expose_event: xlib::XExposeEvent = From::from(event);
-                    if expose_event.window == self.notification.borrow().window {
-                        unsafe {
-                            self.notification.borrow().redraw();
-                        }
-                    }
+                    self.handle_expose(expose_event);
                 }
                 _ => (),
             }
@@ -403,8 +385,7 @@ impl WindowManager {
                         {
                             if self.config.notifications_enabled {
                                 unsafe {
-                                    self.notification
-                                        .borrow_mut()
+                                    self.notification_manager
                                         .show_error(&format!("Failed to spawn {}: {}", cmd, e));
                                 }
                             }
@@ -874,7 +855,7 @@ impl WindowManager {
 
         self.raise_floating_windows();
         unsafe {
-            xlib::XRaiseWindow(self.display.raw(), self.notification.borrow().window);
+            self.notification_manager.raise_all();
             xlib::XSync(self.display.raw(), 0);
         }
     }
@@ -901,7 +882,9 @@ impl WindowManager {
             && !self.resizing
             && enter_event.window != 0
             && enter_event.window != self.layout.get_root()
-            && enter_event.window != self.notification.borrow().window
+            && !self
+                .notification_manager
+                .contains_window(enter_event.window)
         {
             let window_id = enter_event.window;
             let is_floating = if let Some(workspace) = self.workspaces.get(self.current_workspace) {
@@ -932,12 +915,12 @@ impl WindowManager {
             if is_floating {
                 unsafe {
                     xlib::XRaiseWindow(self.display.raw(), window_id);
-                    xlib::XRaiseWindow(self.display.raw(), self.notification.borrow().window);
+                    self.notification_manager.raise_all();
                 }
             } else {
                 self.raise_floating_windows();
                 unsafe {
-                    xlib::XRaiseWindow(self.display.raw(), self.notification.borrow().window);
+                    self.notification_manager.raise_all();
                 }
             }
         }
@@ -1165,6 +1148,33 @@ impl WindowManager {
                 1,
             );
             xlib::XSync(self.display.raw(), 0);
+        }
+    }
+
+    fn handle_button_press(&mut self, event: xlib::XButtonEvent) {
+        let button_event: xlib::XButtonEvent = event;
+        debug!(
+            "Button press: window={}, button={}, state={}",
+            button_event.window, button_event.button, button_event.state
+        );
+
+        unsafe {
+            self.notification_manager
+                .handle_button_press(button_event.window);
+        }
+
+        if button_event.state & self.config.get_modifier() != 0 {
+            match button_event.button {
+                1 => self.start_window_drag(button_event),
+                3 => self.start_window_resize(button_event),
+                _ => (),
+            }
+        }
+    }
+
+    fn handle_expose(&mut self, event: xlib::XExposeEvent) {
+        unsafe {
+            self.notification_manager.handle_expose(event.window);
         }
     }
 }

@@ -10,6 +10,69 @@ pub struct NotificationWindow {
     line_height: i32,
     padding: i32,
     width: i32,
+    height: i32,
+    x: i32,
+    y: i32,
+}
+
+pub struct NotificationManager {
+    display: *mut xlib::Display,
+    root: xlib::Window,
+    notifications: Vec<NotificationWindow>,
+    width: i32,
+    padding: i32,
+    initial_y: i32,
+}
+
+impl NotificationManager {
+    pub unsafe fn new(display: *mut xlib::Display, root: xlib::Window) -> Self {
+        Self {
+            display,
+            root,
+            notifications: Vec::new(),
+            width: 600,
+            padding: 10,
+            initial_y: 50,
+        }
+    }
+
+    pub unsafe fn show_error(&mut self, message: &str) {
+        let mut notification = NotificationWindow::new(self.display, self.root, self.width);
+        notification.show_error(message);
+        self.notifications.push(notification);
+        self.relayout();
+    }
+
+    pub unsafe fn handle_button_press(&mut self, window: xlib::Window) {
+        if let Some(index) = self.notifications.iter().position(|n| n.window == window) {
+            self.notifications.remove(index);
+            self.relayout();
+        }
+    }
+
+    pub unsafe fn handle_expose(&self, window: xlib::Window) {
+        if let Some(notification) = self.notifications.iter().find(|n| n.window == window) {
+            notification.redraw();
+        }
+    }
+
+    pub unsafe fn raise_all(&self) {
+        for notification in &self.notifications {
+            xlib::XRaiseWindow(self.display, notification.window);
+        }
+    }
+
+    pub fn contains_window(&self, window: xlib::Window) -> bool {
+        self.notifications.iter().any(|n| n.window == window)
+    }
+
+    unsafe fn relayout(&mut self) {
+        let mut current_y = self.initial_y;
+        for notification in &mut self.notifications {
+            notification.move_to(current_y);
+            current_y += notification.height + self.padding;
+        }
+    }
 }
 
 impl NotificationWindow {
@@ -19,13 +82,12 @@ impl NotificationWindow {
     /// - The display pointer must be valid and point to an active X display connection
     /// - The root window must be a valid window ID for the given display
     /// - The caller must ensure the display connection remains valid for the lifetime of this window
-    pub unsafe fn new(display: *mut xlib::Display, root: xlib::Window) -> Self {
+    pub unsafe fn new(display: *mut xlib::Display, root: xlib::Window, width: i32) -> Self {
         let screen = xlib::XDefaultScreen(display);
         let white = xlib::XWhitePixel(display, screen);
         let red = 0xFF0000;
         let dark_gray = 0x0F0F0F;
 
-        let width = 600i32;
         let line_height = 20i32;
         let padding = 10i32;
         let initial_height = line_height + padding * 2;
@@ -52,9 +114,7 @@ impl NotificationWindow {
         xlib::XChangeWindowAttributes(
             display,
             window,
-            xlib::CWOverrideRedirect as u64
-                | xlib::CWSaveUnder as u64
-                | xlib::CWDontPropagate as u64,
+            xlib::CWOverrideRedirect | xlib::CWSaveUnder | xlib::CWDontPropagate,
             &mut attrs,
         );
 
@@ -111,6 +171,9 @@ impl NotificationWindow {
             line_height,
             padding,
             width,
+            height: initial_height,
+            x,
+            y,
         }
     }
 
@@ -123,19 +186,14 @@ impl NotificationWindow {
         self.current_message = Some(message.to_string());
 
         let lines: Vec<&str> = message.split('\n').collect();
-        let new_height = self.line_height * lines.len() as i32 + self.padding * 2;
+        self.height = self.line_height * lines.len() as i32 + self.padding * 2;
 
         xlib::XResizeWindow(
             self.display,
             self.window,
             self.width as u32,
-            new_height as u32,
+            self.height as u32,
         );
-
-        let screen = xlib::XDefaultScreen(self.display);
-        let x = (xlib::XDisplayWidth(self.display, screen) - self.width) / 2;
-        let y = 50;
-        xlib::XMoveWindow(self.display, self.window, x, y);
 
         xlib::XMapWindow(self.display, self.window);
         xlib::XRaiseWindow(self.display, self.window);
@@ -150,6 +208,13 @@ impl NotificationWindow {
         );
 
         self.redraw();
+    }
+
+    unsafe fn move_to(&mut self, y: i32) {
+        self.y = y;
+        let screen = xlib::XDefaultScreen(self.display);
+        self.x = (xlib::XDisplayWidth(self.display, screen) - self.width) / 2;
+        xlib::XMoveWindow(self.display, self.window, self.x, self.y);
     }
 
     /// Redraws the current message
@@ -180,26 +245,6 @@ impl NotificationWindow {
 
             xlib::XFlush(self.display);
         }
-    }
-
-    /// Hides the notification window
-    ///
-    /// # Safety
-    /// - The display connection must still be valid
-    /// - The window must not have been destroyed
-    pub unsafe fn hide(&mut self) {
-        self.current_message = None;
-        xlib::XUnmapWindow(self.display, self.window);
-        xlib::XFlush(self.display);
-    }
-
-    /// Handles a button press event on the notification window
-    ///
-    /// # Safety
-    /// - The display connection must still be valid
-    /// - The window must not have been destroyed
-    pub unsafe fn handle_button_press(&mut self) {
-        self.hide();
     }
 }
 
