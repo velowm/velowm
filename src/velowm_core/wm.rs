@@ -232,6 +232,7 @@ impl WindowManager {
                     let expose_event: xlib::XExposeEvent = From::from(event);
                     self.handle_expose(expose_event);
                 }
+                xlib::ClientMessage => self.handle_client_message(event),
                 _ => (),
             }
         }
@@ -1467,6 +1468,16 @@ impl WindowManager {
     fn handle_expose(&mut self, event: xlib::XExposeEvent) {
         unsafe {
             self.notification_manager.handle_expose(event.window);
+        }
+    }
+
+    fn handle_client_message(&mut self, event: xlib::XEvent) {
+        let client_event: xlib::XClientMessageEvent = From::from(event);
+        if client_event.message_type == self.net_current_desktop {
+            let workspace_index = client_event.data.get_long(0) as usize;
+            if workspace_index < self.workspaces.len() {
+                self.switch_to_workspace(workspace_index);
+            }
         }
     }
 }
