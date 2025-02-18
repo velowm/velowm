@@ -423,10 +423,18 @@ impl WindowManager {
 
             if child_return != 0 && child_return != self.layout.get_root() {
                 if let Some(workspace) = self.workspaces.get_mut(self.current_workspace) {
-                    if let Some(window) =
-                        workspace.windows.iter_mut().find(|w| w.id == child_return)
-                    {
-                        if window.is_floating {
+                    let window_id = child_return;
+                    let is_floating = workspace
+                        .windows
+                        .iter()
+                        .find(|w| w.id == window_id)
+                        .map(|w| w.is_floating)
+                        .unwrap_or(false);
+
+                    if is_floating {
+                        if let Some(window) =
+                            workspace.windows.iter_mut().find(|w| w.id == window_id)
+                        {
                             window.is_floating = false;
                             window.x = window.pre_float_x;
                             window.y = window.pre_float_y;
@@ -434,7 +442,20 @@ impl WindowManager {
                             window.height = window.pre_float_height;
                             self.layout.add_window(window.id);
                             self.layout.relayout();
-                        } else {
+                        }
+
+                        for window in &workspace.windows {
+                            let border_color = if window.id == window_id {
+                                self.config.get_focused_border_color()
+                            } else {
+                                self.config.get_border_color()
+                            };
+                            xlib::XSetWindowBorder(self.display.raw(), window.id, border_color);
+                        }
+                    } else {
+                        if let Some(window) =
+                            workspace.windows.iter_mut().find(|w| w.id == window_id)
+                        {
                             let mut win_attrs: xlib::XWindowAttributes = std::mem::zeroed();
                             xlib::XGetWindowAttributes(
                                 self.display.raw(),
@@ -536,8 +557,18 @@ impl WindowManager {
 
                             self.layout.remove_window(window.id);
                             self.layout.relayout();
-                            xlib::XRaiseWindow(self.display.raw(), window.id);
                         }
+
+                        for window in &workspace.windows {
+                            let border_color = if window.id == window_id {
+                                self.config.get_focused_border_color()
+                            } else {
+                                self.config.get_border_color()
+                            };
+                            xlib::XSetWindowBorder(self.display.raw(), window.id, border_color);
+                        }
+
+                        xlib::XRaiseWindow(self.display.raw(), window_id);
                     }
                 }
             }
