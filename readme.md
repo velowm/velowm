@@ -20,3 +20,7 @@ Basic xinitrc:
 ```sh
 exec velowm
 ```
+
+## Documentation / Feature-set
+
+See [documentation.md](documentation.md).
