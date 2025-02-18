@@ -112,6 +112,7 @@ impl Default for Config {
                     width: 800,
                     height: 600,
                 },
+                focus_follows_mouse: true,
             },
             logging_enabled: true,
             auto_generated: true,
@@ -182,6 +183,8 @@ border_color = "#2B0000"
 focused_border_color = "#FF0000"
 # Gap between windows in pixels
 gaps = 8
+# Whether focus follows mouse movement
+focus_follows_mouse = true
 
 # Floating window settings
 [appearance.floating]

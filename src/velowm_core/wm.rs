@@ -808,6 +808,19 @@ impl WindowManager {
                     0,
                     0,
                 );
+
+                xlib::XGrabButton(
+                    self.display.raw(),
+                    xlib::AnyButton as u32,
+                    0,
+                    window_id,
+                    1,
+                    (xlib::ButtonPressMask | xlib::ButtonReleaseMask) as u32,
+                    xlib::GrabModeAsync,
+                    xlib::GrabModeAsync,
+                    0,
+                    0,
+                );
             }
             is_dock
         };
@@ -885,6 +898,7 @@ impl WindowManager {
             && !self
                 .notification_manager
                 .contains_window(enter_event.window)
+            && self.config.appearance.focus_follows_mouse
         {
             let window_id = enter_event.window;
             let is_floating = if let Some(workspace) = self.workspaces.get(self.current_workspace) {
@@ -927,9 +941,7 @@ impl WindowManager {
     }
 
     fn handle_leave_notify(&mut self, _event: xlib::XEvent) {
-        // we don't need to do anything on leave, as entering a new window will handle focus. in the future we might want
-        // a config option to disable automatic focus changing, for now leave this empty. If automatic focus changing is
-        // disabled then allow clicking on windows to change focus.
+        // no-op
     }
 
     fn switch_to_workspace(&mut self, index: usize) {
@@ -1179,6 +1191,50 @@ impl WindowManager {
                 1 => self.start_window_drag(button_event),
                 3 => self.start_window_resize(button_event),
                 _ => (),
+            }
+        } else if !self.config.appearance.focus_follows_mouse
+            && button_event.window != 0
+            && button_event.window != self.layout.get_root()
+            && !self
+                .notification_manager
+                .contains_window(button_event.window)
+        {
+            let window_id = button_event.window;
+            let is_floating = if let Some(workspace) = self.workspaces.get(self.current_workspace) {
+                for window in &workspace.windows {
+                    unsafe {
+                        let border_color = if window.id == window_id {
+                            self.config.get_focused_border_color()
+                        } else {
+                            self.config.get_border_color()
+                        };
+                        xlib::XSetWindowBorder(self.display.raw(), window.id, border_color);
+                    }
+                }
+
+                workspace
+                    .windows
+                    .iter()
+                    .find(|w| w.id == window_id)
+                    .map(|w| w.is_floating)
+                    .unwrap_or(false)
+            } else {
+                false
+            };
+
+            self.layout.focus_window(window_id);
+            self.set_active_window(window_id);
+
+            if is_floating {
+                unsafe {
+                    xlib::XRaiseWindow(self.display.raw(), window_id);
+                    self.notification_manager.raise_all();
+                }
+            } else {
+                self.raise_floating_windows();
+                unsafe {
+                    self.notification_manager.raise_all();
+                }
             }
         }
     }

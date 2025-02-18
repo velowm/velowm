@@ -22,6 +22,8 @@ pub struct Appearance {
     pub gaps: u32,
     #[serde(default)]
     pub floating: FloatingWindow,
+    #[serde(default = "default_focus_follows_mouse")]
+    pub focus_follows_mouse: bool,
 }
 
 fn default_border_width() -> u32 {
@@ -41,6 +43,9 @@ fn default_float_width() -> u32 {
 }
 fn default_float_height() -> u32 {
     600
+}
+fn default_focus_follows_mouse() -> bool {
+    true
 }
 
 impl Appearance {
