@@ -1,7 +1,36 @@
 use anyhow::Result;
 use log::error;
-use std::{env, process};
+use rand::random;
+use std::{
+    env, fs,
+    io::{self, Write},
+    path::PathBuf,
+    process,
+};
 use velowm::{velowm_core::wm::WindowManager, Config};
+
+fn get_log_file_path() -> Result<PathBuf> {
+    let cache_dir = PathBuf::from(env::var("HOME")?).join(".cache/velowm");
+    fs::create_dir_all(&cache_dir)?;
+    Ok(cache_dir.join(format!("log{}.log", random::<u32>())))
+}
+
+struct DualWriter {
+    file: fs::File,
+}
+
+impl Write for DualWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        io::stdout().write_all(buf)?;
+        self.file.write_all(buf)?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        io::stdout().flush()?;
+        self.file.flush()
+    }
+}
 
 fn main() -> Result<()> {
     let config = Config::load().unwrap_or_default();
@@ -10,7 +39,22 @@ fn main() -> Result<()> {
         if env::var("RUST_LOG").is_err() {
             env::set_var("RUST_LOG", "debug");
         }
-        env_logger::init();
+
+        let log_file = fs::File::create(get_log_file_path()?)?;
+        let dual_writer = DualWriter { file: log_file };
+
+        env_logger::Builder::from_default_env()
+            .format(|buf, record| {
+                writeln!(
+                    buf,
+                    "{} [{}] {}",
+                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                    record.level(),
+                    record.args()
+                )
+            })
+            .target(env_logger::Target::Pipe(Box::new(dual_writer)))
+            .init();
     }
 
     if env::var("WAYLAND_DISPLAY").is_ok()
