@@ -977,9 +977,20 @@ impl WindowManager {
                             0,
                             0,
                         );
+
+                        if window.is_floating {
+                            xlib::XMoveResizeWindow(
+                                self.display.raw(),
+                                window.id,
+                                window.x,
+                                window.y,
+                                window.width,
+                                window.height,
+                            );
+                        }
                     }
                 }
-                if !window.is_dock {
+                if !window.is_dock && !window.is_floating {
                     self.layout.add_window(window.id);
                 }
             }
