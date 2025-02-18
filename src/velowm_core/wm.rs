@@ -685,29 +685,10 @@ impl WindowManager {
     fn close_focused_window(&mut self) {
         debug!("Attempting to close focused window");
         unsafe {
-            let mut root_return: xlib::Window = 0;
-            let mut child_return: xlib::Window = 0;
-            let mut root_x: i32 = 0;
-            let mut root_y: i32 = 0;
-            let mut win_x: i32 = 0;
-            let mut win_y: i32 = 0;
-            let mut mask_return: u32 = 0;
-
-            xlib::XQueryPointer(
-                self.display.raw(),
-                self.layout.get_root(),
-                &mut root_return,
-                &mut child_return,
-                &mut root_x,
-                &mut root_y,
-                &mut win_x,
-                &mut win_y,
-                &mut mask_return,
-            );
-
-            if child_return != 0 && child_return != self.layout.get_root() {
+            if let Some(focused_window) = self.layout.get_focused_window() {
                 if let Some(workspace) = self.workspaces.get(self.current_workspace) {
-                    if let Some(window) = workspace.windows.iter().find(|w| w.id == child_return) {
+                    if let Some(window) = workspace.windows.iter().find(|w| w.id == focused_window)
+                    {
                         if window.is_dock {
                             debug!("Ignoring close request for dock window");
                             return;
@@ -725,7 +706,7 @@ impl WindowManager {
 
                 if xlib::XGetWMProtocols(
                     self.display.raw(),
-                    child_return,
+                    focused_window,
                     &mut protocols,
                     &mut num_protocols,
                 ) != 0
@@ -742,20 +723,21 @@ impl WindowManager {
                                 serial: 0,
                                 send_event: 1,
                                 display: self.display.raw(),
-                                window: child_return,
+                                window: focused_window,
                                 message_type: wm_protocols,
                                 format: 32,
                                 data,
                             },
                         };
-                        xlib::XSendEvent(self.display.raw(), child_return, 0, 0, &mut event);
+                        xlib::XSendEvent(self.display.raw(), focused_window, 0, 0, &mut event);
                     } else {
-                        xlib::XDestroyWindow(self.display.raw(), child_return);
+                        xlib::XDestroyWindow(self.display.raw(), focused_window);
                     }
                     xlib::XFree(protocols as *mut _);
                 } else {
-                    xlib::XDestroyWindow(self.display.raw(), child_return);
+                    xlib::XDestroyWindow(self.display.raw(), focused_window);
                 }
+
                 xlib::XSync(self.display.raw(), 0);
             }
         }

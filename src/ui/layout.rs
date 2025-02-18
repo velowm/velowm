@@ -86,6 +86,10 @@ impl MasterStackLayout {
         self.root
     }
 
+    pub fn get_focused_window(&self) -> Option<xlib::Window> {
+        self.focused_window
+    }
+
     pub fn focus_window(&mut self, window: xlib::Window) {
         if window == self.root {
             return;
