@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::{fs, path::PathBuf};
 
 use crate::{
-    ui::appearance::Appearance,
+    ui::appearance::{Appearance, FloatingWindow},
     utils::{
         command::Command,
         keybind::{self, Bind},
@@ -61,8 +61,58 @@ impl Default for Config {
                     key: "f".to_string(),
                     command: Command::ToggleFullscreen,
                 },
+                Bind {
+                    key: "1".to_string(),
+                    command: Command::Workspace(0),
+                },
+                Bind {
+                    key: "2".to_string(),
+                    command: Command::Workspace(1),
+                },
+                Bind {
+                    key: "3".to_string(),
+                    command: Command::Workspace(2),
+                },
+                Bind {
+                    key: "4".to_string(),
+                    command: Command::Workspace(3),
+                },
+                Bind {
+                    key: "5".to_string(),
+                    command: Command::Workspace(4),
+                },
+                Bind {
+                    key: "6".to_string(),
+                    command: Command::Workspace(5),
+                },
+                Bind {
+                    key: "7".to_string(),
+                    command: Command::Workspace(6),
+                },
+                Bind {
+                    key: "8".to_string(),
+                    command: Command::Workspace(7),
+                },
+                Bind {
+                    key: "9".to_string(),
+                    command: Command::Workspace(8),
+                },
+                Bind {
+                    key: "0".to_string(),
+                    command: Command::Workspace(9),
+                },
             ],
-            appearance: Appearance::default(),
+            appearance: Appearance {
+                border_width: 2,
+                border_color: "#2B0000".to_string(),
+                focused_border_color: "#FF0000".to_string(),
+                gaps: 8,
+                floating: FloatingWindow {
+                    center_on_float: true,
+                    width: 800,
+                    height: 600,
+                },
+            },
             logging_enabled: true,
             auto_generated: true,
             notifications_enabled: true,
