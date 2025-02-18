@@ -1267,6 +1267,8 @@ impl WindowManager {
 
             debug!("Setting grabbing cursor for window {}", event.window);
             xlib::XDefineCursor(self.display.raw(), event.window, self.cursor.grabbing());
+            self.layout.focus_window(event.window);
+            self.set_active_window(event.window);
             xlib::XSync(self.display.raw(), 0);
         }
     }
@@ -1328,6 +1330,8 @@ impl WindowManager {
 
                     debug!("Setting grabbing cursor for window {}", event.window);
                     xlib::XDefineCursor(self.display.raw(), event.window, self.cursor.grabbing());
+                    self.layout.focus_window(event.window);
+                    self.set_active_window(event.window);
                     xlib::XSync(self.display.raw(), 0);
                 }
             }
