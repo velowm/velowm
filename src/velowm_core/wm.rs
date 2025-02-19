@@ -258,6 +258,10 @@ impl WindowManager {
                 }
             }
         }
+
+        unsafe {
+            self.notification_manager.raise_all();
+        }
     }
 
     fn handle_motion_notify(&mut self, _event: xlib::XEvent) {
@@ -618,7 +622,6 @@ impl WindowManager {
                     }
 
                     self.raise_floating_windows();
-                    self.notification_manager.raise_all();
                     xlib::XSync(self.display.raw(), 0);
                 }
             }

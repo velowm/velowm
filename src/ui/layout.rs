@@ -107,7 +107,6 @@ impl MasterStackLayout {
                 xlib::RevertToPointerRoot,
                 xlib::CurrentTime,
             );
-            xlib::XRaiseWindow(self.display, window);
             xlib::XSync(self.display, 0);
         }
 
