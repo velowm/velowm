@@ -1,6 +1,16 @@
 [package]
 name = "velowm"
 version = "0.1.0"
+authors = ["Nyx <nnyyxxxx@protonmail.com>", "adamperkowski <adas1per@protonmail.com>"]
+license = "GPL-2.0"
+description = "Simple window manager for X11, written in Rust."
+repository = "https://github.com/velowm/velowm.git"
+readme = "readme.md"
+keywords = [
+    "window manager",
+    "x11",
+    "rust",
+]
 edition = "2021"
 
 [dependencies]
@@ -13,3 +23,10 @@ toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 rand = "0.9"
 chrono = "0.4"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+opt-level = 3
