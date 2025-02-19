@@ -300,7 +300,7 @@ impl WindowManager {
                                 window.x = new_x;
                                 window.y = new_y;
                                 xlib::XMoveWindow(self.display.raw(), window.id, new_x, new_y);
-                                xlib::XRaiseWindow(self.display.raw(), window.id);
+                                self.raise_floating_windows();
                                 return;
                             }
                         }
@@ -340,7 +340,7 @@ impl WindowManager {
                                     new_width,
                                     new_height,
                                 );
-                                xlib::XRaiseWindow(self.display.raw(), window.id);
+                                self.raise_floating_windows();
                             }
                         }
                     }
