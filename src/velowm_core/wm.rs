@@ -243,9 +243,19 @@ impl WindowManager {
     fn raise_floating_windows(&mut self) {
         if let Some(workspace) = self.workspaces.get(self.current_workspace) {
             for window in &workspace.windows {
-                if window.is_floating && !window.is_dock {
+                if window.is_floating && !window.is_dock && Some(window.id) != self.dragged_window {
                     unsafe {
                         xlib::XRaiseWindow(self.display.raw(), window.id);
+                    }
+                }
+            }
+
+            if let Some(dragged) = self.dragged_window {
+                if let Some(window) = workspace.windows.iter().find(|w| w.id == dragged) {
+                    if window.is_floating {
+                        unsafe {
+                            xlib::XRaiseWindow(self.display.raw(), dragged);
+                        }
                     }
                 }
             }
