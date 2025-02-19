@@ -316,7 +316,6 @@ impl WindowManager {
                         }
                     }
 
-                    debug!("Dragging window {} over window {}", dragged, child_return);
                     if let Some(target) = child_return.checked_sub(0).filter(|_| {
                         child_return != dragged
                             && child_return != 0
