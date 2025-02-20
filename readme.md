@@ -39,6 +39,7 @@ Basic xinitrc:
 exec velowm
 ```
 
-## Debugging
+## Proof of concept / reason for archive
 
-Submit an issue with relevant logs from `~/.cache/velowm/`
+I wrote this as a proof of concept, this was never going to be a long-term thing. Just something I can write within a couple of days.
+Anyways, I will probably rewrite this sooner or later as a wayland compositor.
